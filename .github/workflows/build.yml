@@ -254,12 +254,26 @@ jobs:
               <item android:drawable="@drawable/ic_launcher_foreground" />
           </layer-list>
           TSEOF
+          mkdir -p "$(dirname "app/src/main/res/values-night-v29/styles.xml")"
+          cat > app/src/main/res/values-night-v29/styles.xml <<'TSEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <!-- тёмная тема телефона -->
+              <style name="AppTheme" parent="android:Theme.Material.NoActionBar">
+                  <item name="android:windowBackground">@color/splash</item>
+                  <item name="android:statusBarColor">@color/bg</item>
+                  <item name="android:navigationBarColor">@color/bg</item>
+                  <item name="android:colorAccent">@color/accent</item>
+                  <item name="android:forceDarkAllowed">false</item>
+              </style>
+          </resources>
+          TSEOF
           mkdir -p "$(dirname "app/src/main/res/values-v29/styles.xml")"
           cat > app/src/main/res/values-v29/styles.xml <<'TSEOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <!-- DayNight: сайт внутри видит светлую/тёмную тему телефона (prefers-color-scheme) -->
-              <style name="AppTheme" parent="android:Theme.DeviceDefault.DayNight.NoActionBar">
+              <!-- светлая тема телефона: сайт внутри тоже светлый (prefers-color-scheme) -->
+              <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
                   <item name="android:windowBackground">@color/splash</item>
                   <item name="android:statusBarColor">@color/bg</item>
                   <item name="android:navigationBarColor">@color/bg</item>
