@@ -1,0 +1,1884 @@
+# Сборка приложения TS Messenger для Android.
+# Весь проект приложения — внутри этого файла (шаг «Создать проект»): ничего больше загружать не нужно.
+# Каждое изменение этого файла = новая версия: APK появляется в Releases, а установленное приложение
+# само находит её и предлагает обновиться.
+#
+# Один раз нужно добавить секреты: Settings → Secrets and variables → Actions → New repository secret
+#   KEYSTORE_B64      — ключ подписи (текст base64)
+#   KEYSTORE_PASSWORD — пароль ключа
+# Без одинакового ключа Android не даст установить обновление поверх старой версии.
+
+name: Android APK
+
+on:
+  push:
+    paths:
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      VERSION_CODE: ${{ github.run_number }}
+      SITE_URL: https://m.topsstudio.com
+    steps:
+      - name: Проверить секреты
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$KS_PASS" ]; then
+            echo "::error::Добавьте секреты KEYSTORE_B64 и KEYSTORE_PASSWORD: Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Создать проект
+        run: |
+          mkdir -p proj && cd proj
+          mkdir -p "$(dirname "build.gradle")"
+          cat > build.gradle <<'TSEOF'
+          plugins {
+              id 'com.android.application' version '8.5.2' apply false
+          }
+          TSEOF
+          mkdir -p "$(dirname "gradle.properties")"
+          cat > gradle.properties <<'TSEOF'
+          org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8
+          android.nonTransitiveRClass=true
+          android.useAndroidX=false
+          TSEOF
+          mkdir -p "$(dirname "settings.gradle")"
+          cat > settings.gradle <<'TSEOF'
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "TSMessenger"
+          include ':app'
+          TSEOF
+          mkdir -p "$(dirname "app/build.gradle")"
+          cat > app/build.gradle <<'TSEOF'
+          plugins {
+              id 'com.android.application'
+          }
+
+          // Номер версии = номер сборки на GitHub (каждая сборка новее предыдущей — по нему приложение находит обновление)
+          def vcode = (System.getenv("VERSION_CODE") ?: "1") as int
+          def site = System.getenv("SITE_URL") ?: "https://m.topsstudio.com"
+          def repo = System.getenv("GITHUB_REPOSITORY") ?: "toptops2013/ts-messenger"
+
+          android {
+              namespace 'com.topsstudio.messenger'
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "com.topsstudio.messenger"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode vcode
+                  versionName "1.0." + vcode
+                  buildConfigField "String", "SITE", "\"" + site + "\""
+                  buildConfigField "String", "REPO", "\"" + repo + "\""
+              }
+
+              buildFeatures { buildConfig true }
+
+              signingConfigs {
+                  release {
+                      storeFile file("release.jks")
+                      storePassword System.getenv("KS_PASS")
+                      keyAlias "tsmessenger"
+                      keyPassword System.getenv("KS_PASS")
+                  }
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      signingConfig signingConfigs.release
+                  }
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+
+              lint {
+                  checkReleaseBuilds false
+                  abortOnError false
+              }
+          }
+
+          dependencies {
+              implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+          }
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/AndroidManifest.xml")"
+          cat > app/src/main/AndroidManifest.xml <<'TSEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+              <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+              <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+              <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+
+              <uses-feature android:name="android.hardware.camera" android:required="false" />
+              <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
+              <application
+                  android:label="@string/app_name"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher"
+                  android:theme="@style/AppTheme"
+                  android:allowBackup="false"
+                  android:usesCleartextTraffic="false"
+                  android:hardwareAccelerated="true"
+                  android:supportsRtl="true">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleTask"
+                      android:windowSoftInputMode="adjustResize"
+                      android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                      <!-- ссылки на мессенджер (и одноразовые ссылки входа) открываются в приложении -->
+                      <intent-filter>
+                          <action android:name="android.intent.action.VIEW" />
+                          <category android:name="android.intent.category.DEFAULT" />
+                          <category android:name="android.intent.category.BROWSABLE" />
+                          <data android:scheme="https" android:host="m.topsstudio.com" />
+                      </intent-filter>
+                  </activity>
+
+                  <service
+                      android:name=".PushService"
+                      android:exported="false"
+                      android:foregroundServiceType="remoteMessaging" />
+
+                  <receiver android:name=".BootReceiver" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.BOOT_COMPLETED" />
+                          <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                      </intent-filter>
+                  </receiver>
+                  <receiver android:name=".ActionReceiver" android:exported="false" />
+                  <receiver android:name=".InstallReceiver" android:exported="false" />
+              </application>
+          </manifest>
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/res/drawable/ic_launcher_background.xml")"
+          cat > app/src/main/res/drawable/ic_launcher_background.xml <<'TSEOF'
+          <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+              <gradient android:angle="315" android:startColor="#7c8cff" android:endColor="#ff7ab6" />
+          </shape>
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/res/drawable/ic_launcher_foreground.xml")"
+          cat > app/src/main/res/drawable/ic_launcher_foreground.xml <<'TSEOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp" android:height="108dp" android:viewportWidth="512" android:viewportHeight="512">
+              <group android:pivotX="256" android:pivotY="256" android:scaleX="0.62" android:scaleY="0.62">
+                  <path android:pathData="M394,245a138,138 0,0 1,-148 138a141,141 0,0 1,-62 -15l-86,31 31,-85a138,138 0,1 1,265 -69z" android:strokeColor="#FFFFFFFF" android:strokeWidth="36"
+                      android:strokeLineJoin="round" android:fillColor="#00000000" />
+              </group>
+          </vector>
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/res/drawable/ic_launcher_round_bg.xml")"
+          cat > app/src/main/res/drawable/ic_launcher_round_bg.xml <<'TSEOF'
+          <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+              <corners android:radius="22dp" />
+              <gradient android:angle="315" android:startColor="#7c8cff" android:endColor="#ff7ab6" />
+          </shape>
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/res/drawable/ic_stat.xml")"
+          cat > app/src/main/res/drawable/ic_stat.xml <<'TSEOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp" android:height="24dp" android:viewportWidth="512" android:viewportHeight="512">
+              <path android:pathData="M394,245a138,138 0,0 1,-148 138a141,141 0,0 1,-62 -15l-86,31 31,-85a138,138 0,1 1,265 -69z" android:strokeColor="#FFFFFFFF" android:strokeWidth="44"
+                  android:strokeLineJoin="round" android:fillColor="#00000000" />
+          </vector>
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml")"
+          cat > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'TSEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@drawable/ic_launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+              <monochrome android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/res/mipmap/ic_launcher.xml")"
+          cat > app/src/main/res/mipmap/ic_launcher.xml <<'TSEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <!-- Android 7: обычный значок (скруглённый квадрат) -->
+          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+              <item android:drawable="@drawable/ic_launcher_round_bg" android:left="4dp" android:top="4dp" android:right="4dp" android:bottom="4dp" />
+              <item android:drawable="@drawable/ic_launcher_foreground" />
+          </layer-list>
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/res/values-v29/styles.xml")"
+          cat > app/src/main/res/values-v29/styles.xml <<'TSEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <!-- DayNight: сайт внутри видит светлую/тёмную тему телефона (prefers-color-scheme) -->
+              <style name="AppTheme" parent="android:Theme.DeviceDefault.DayNight.NoActionBar">
+                  <item name="android:windowBackground">@color/splash</item>
+                  <item name="android:statusBarColor">@color/bg</item>
+                  <item name="android:navigationBarColor">@color/bg</item>
+                  <item name="android:colorAccent">@color/accent</item>
+                  <item name="android:forceDarkAllowed">false</item>
+              </style>
+          </resources>
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/res/values/colors.xml")"
+          cat > app/src/main/res/values/colors.xml <<'TSEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="bg">#0f0f12</color>
+              <color name="splash">#0b1530</color>
+              <color name="accent">#7c8cff</color>
+          </resources>
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/res/values/strings.xml")"
+          cat > app/src/main/res/values/strings.xml <<'TSEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">TS Messenger</string>
+          </resources>
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/res/values/styles.xml")"
+          cat > app/src/main/res/values/styles.xml <<'TSEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="android:Theme.Material.NoActionBar">
+                  <item name="android:windowBackground">@color/splash</item>
+                  <item name="android:statusBarColor">@color/bg</item>
+                  <item name="android:navigationBarColor">@color/bg</item>
+                  <item name="android:colorAccent">@color/accent</item>
+                  <item name="android:colorPrimary">@color/bg</item>
+                  <item name="android:colorPrimaryDark">@color/bg</item>
+              </style>
+          </resources>
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/java/com/topsstudio/messenger/ActionReceiver.java")"
+          cat > app/src/main/java/com/topsstudio/messenger/ActionReceiver.java <<'TSEOF'
+          package com.topsstudio.messenger;
+
+          import android.app.RemoteInput;
+          import android.content.BroadcastReceiver;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.os.Bundle;
+
+          import org.json.JSONObject;
+
+          import java.util.UUID;
+
+          /** Кнопки в уведомлениях: «Ответить», «Прочитано», «Отклонить» звонок. Работают без открытия приложения. */
+          public class ActionReceiver extends BroadcastReceiver {
+              static final String KEY_TEXT = "reply_text";
+
+              @Override
+              public void onReceive(Context c, Intent i) {
+                  final String a = i.getAction() == null ? "" : i.getAction();
+                  final int chat = i.getIntExtra("chat", 0);
+                  final long msg = i.getLongExtra("msg", 0);
+                  final Context app = c.getApplicationContext();
+                  if (a.equals("ts.dismiss")) { Notifier.forget(chat); return; }
+                  final PendingResult pr = goAsync();
+                  new Thread(() -> {
+                      try {
+                          if (a.equals("ts.reply")) {
+                              Bundle b = RemoteInput.getResultsFromIntent(i);
+                              CharSequence t = b != null ? b.getCharSequence(KEY_TEXT) : null;
+                              String text = t == null ? "" : t.toString().trim();
+                              if (!text.isEmpty() && chat > 0) {
+                                  JSONObject j = new JSONObject();
+                                  j.put("text", text.length() > 4000 ? text.substring(0, 4000) : text);
+                                  j.put("nonce", UUID.randomUUID().toString().replace("-", "").substring(0, 24));
+                                  int code = Net.postJson("/api/chats/" + chat + "/messages", j.toString());
+                                  if (code == 200) {
+                                      Notifier.addOwnReply(app, chat, text);
+                                      Net.postJson("/api/chats/" + chat + "/read", "{\"id\":" + Long.MAX_VALUE / 2 + "}");
+                                  } else {
+                                      Notifier.addOwnReply(app, chat, "⚠ Не отправлено: " + text);
+                                  }
+                              }
+                          } else if (a.equals("ts.read") && chat > 0) {
+                              Net.postJson("/api/chats/" + chat + "/read", "{\"id\":" + Math.max(msg, 1) + "}");
+                              Notifier.cancelChat(app, chat);
+                          } else if (a.equals("ts.decline")) {
+                              String call = i.getStringExtra("call");
+                              Notifier.callEnd(app, call);
+                              if (call != null && call.matches("[A-Za-z0-9_-]{1,40}")) Net.postJson("/api/calls/" + call + "/decline", "{}");
+                          }
+                      } catch (Exception ignored) {
+                      } finally {
+                          pr.finish();
+                      }
+                  }).start();
+              }
+          }
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/java/com/topsstudio/messenger/BootReceiver.java")"
+          cat > app/src/main/java/com/topsstudio/messenger/BootReceiver.java <<'TSEOF'
+          package com.topsstudio.messenger;
+
+          import android.content.BroadcastReceiver;
+          import android.content.Context;
+          import android.content.Intent;
+
+          /** После перезагрузки телефона и после обновления приложения — снова включить фоновое подключение. */
+          public class BootReceiver extends BroadcastReceiver {
+              @Override
+              public void onReceive(Context c, Intent i) {
+                  String a = i.getAction();
+                  if (Intent.ACTION_BOOT_COMPLETED.equals(a) || Intent.ACTION_MY_PACKAGE_REPLACED.equals(a)) {
+                      PushService.startIfNeeded(c.getApplicationContext());
+                  }
+              }
+          }
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/java/com/topsstudio/messenger/Bridge.java")"
+          cat > app/src/main/java/com/topsstudio/messenger/Bridge.java <<'TSEOF'
+          package com.topsstudio.messenger;
+
+          import android.net.Uri;
+          import android.os.Build;
+          import android.webkit.JavascriptInterface;
+
+          import org.json.JSONObject;
+
+          /**
+           * window.TSAppNative — то, что сайт может попросить у приложения.
+           * Каждый вызов работает только со страниц самого мессенджера (m.topsstudio.com).
+           */
+          final class Bridge {
+              private final MainActivity a;
+
+              Bridge(MainActivity a) { this.a = a; }
+
+              private boolean ok() { return a.onMainSite(); }
+
+              private void ui(Runnable r) { a.runOnUiThread(r); }
+
+              @JavascriptInterface
+              public String info() {
+                  if (!ok()) return "{}";
+                  try {
+                      return new JSONObject()
+                              .put("version", BuildConfig.VERSION_NAME)
+                              .put("code", BuildConfig.VERSION_CODE)
+                              .put("android", Build.VERSION.SDK_INT)
+                              .put("background", Prefs.background(a))
+                              .put("showText", Prefs.showText(a))
+                              .put("enabled", Prefs.enabled(a))
+                              .put("batteryExempt", a.batteryExempt())
+                              .put("notif", a.notifState())
+                              .put("push", PushService.running)
+                              .toString();
+                  } catch (Exception e) { return "{}"; }
+              }
+
+              @JavascriptInterface public String notifState() { return ok() ? a.notifState() : "denied"; }
+
+              @JavascriptInterface public void requestNotifications() { if (ok()) ui(a::requestNotifications); }
+
+              @JavascriptInterface public void openNotificationSettings() { if (ok()) ui(a::openNotificationSettings); }
+
+              @JavascriptInterface public void requestBatteryExemption() { if (ok()) ui(a::requestBatteryExemption); }
+
+              /** Уведомление от сайта — только если фоновое подключение не работает (иначе было бы два одинаковых). */
+              @JavascriptInterface
+              public void notify(String json) {
+                  if (!ok() || PushService.running || MainActivity.visible) return;
+                  try {
+                      JSONObject o = new JSONObject(json);
+                      Notifier.simple(a, o.optString("title", "TS Messenger"), o.optString("body", ""), o.optInt("chat"));
+                  } catch (Exception ignored) { }
+              }
+
+              @JavascriptInterface
+              public void setEnabled(boolean v) {
+                  if (!ok()) return;
+                  Prefs.setEnabled(a, v);
+                  if (v) PushService.startIfNeeded(a); else { PushService.stop(a); Notifier.clearMessages(a); }
+              }
+
+              @JavascriptInterface
+              public void setBackground(boolean v) {
+                  if (!ok()) return;
+                  Prefs.setBackground(a, v);
+                  if (v) PushService.startIfNeeded(a); else PushService.stop(a);
+              }
+
+              @JavascriptInterface public void setShowText(boolean v) { if (ok()) Prefs.setShowText(a, v); }
+
+              @JavascriptInterface public void pageReady(boolean notifPref) { if (ok()) a.onPageReady(notifPref); }
+
+              @JavascriptInterface public void sessionChanged() { if (ok()) a.sessionChanged(); }
+
+              @JavascriptInterface public void checkUpdate(boolean manual) { if (ok()) Updater.check(a, manual, a::emit); }
+
+              @JavascriptInterface public void installUpdate() { if (ok()) ui(() -> Updater.install(a, a::emit)); }
+
+              @JavascriptInterface public void callState(boolean active, boolean video) { if (ok()) ui(() -> a.callState(active, video)); }
+
+              @JavascriptInterface public void setSpeaker(boolean on) { if (ok()) ui(() -> a.setSpeaker(on)); }
+
+              @JavascriptInterface public boolean isSpeaker() { return ok() && a.isSpeaker(); }
+
+              @JavascriptInterface public void setTheme(String hex, boolean light) { if (ok() && hex != null && hex.matches("#[0-9a-fA-F]{6}")) ui(() -> a.setTheme(hex, light)); }
+
+              @JavascriptInterface
+              public void openExternal(String url) {
+                  if (!ok() || url == null) return;
+                  Uri u = Uri.parse(url);
+                  if ("https".equals(u.getScheme()) || "http".equals(u.getScheme())) {
+                      ui(() -> { try { a.startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, u)); } catch (Exception ignored) { } });
+                  }
+              }
+          }
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/java/com/topsstudio/messenger/InstallReceiver.java")"
+          cat > app/src/main/java/com/topsstudio/messenger/InstallReceiver.java <<'TSEOF'
+          package com.topsstudio.messenger;
+
+          import android.content.BroadcastReceiver;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.pm.PackageInstaller;
+          import android.widget.Toast;
+
+          /** Ответ системы на установку обновления: показать окно подтверждения или сообщить об ошибке. */
+          public class InstallReceiver extends BroadcastReceiver {
+              @Override
+              @SuppressWarnings("deprecation")
+              public void onReceive(Context c, Intent i) {
+                  int st = i.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
+                  if (st == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+                      Intent confirm = i.getParcelableExtra(Intent.EXTRA_INTENT);
+                      if (confirm != null) {
+                          confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                          try { c.startActivity(confirm); } catch (Exception ignored) { }
+                      }
+                  } else if (st != PackageInstaller.STATUS_SUCCESS) {
+                      String msg = i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
+                      if (st == PackageInstaller.STATUS_FAILURE_CONFLICT || st == PackageInstaller.STATUS_FAILURE_INCOMPATIBLE) {
+                          msg = "подпись не совпадает — удалите приложение и установите заново с сайта";
+                      }
+                      if (st != PackageInstaller.STATUS_FAILURE_ABORTED) {
+                          Toast.makeText(c, "Обновление не установлено: " + (msg == null ? "ошибка" : msg), Toast.LENGTH_LONG).show();
+                      }
+                  }
+              }
+          }
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/java/com/topsstudio/messenger/MainActivity.java")"
+          cat > app/src/main/java/com/topsstudio/messenger/MainActivity.java <<'TSEOF'
+          package com.topsstudio.messenger;
+
+          import android.Manifest;
+          import android.annotation.SuppressLint;
+          import android.app.Activity;
+          import android.app.DownloadManager;
+          import android.content.ActivityNotFoundException;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.pm.PackageManager;
+          import android.graphics.Bitmap;
+          import android.graphics.Color;
+          import android.media.AudioDeviceInfo;
+          import android.media.AudioManager;
+          import android.net.ConnectivityManager;
+          import android.net.Network;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.os.Environment;
+          import android.os.PowerManager;
+          import android.view.View;
+          import android.view.ViewGroup;
+          import android.view.Window;
+          import android.view.WindowManager;
+          import android.webkit.CookieManager;
+          import android.webkit.PermissionRequest;
+          import android.webkit.URLUtil;
+          import android.webkit.ValueCallback;
+          import android.webkit.WebChromeClient;
+          import android.webkit.WebResourceError;
+          import android.webkit.WebResourceRequest;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import android.widget.FrameLayout;
+          import android.widget.Toast;
+
+          import org.json.JSONObject;
+
+          import java.util.ArrayList;
+          import java.util.List;
+
+          /** Главный экран: сайт мессенджера внутри приложения + мост к Android (уведомления, звонки, обновления). */
+          public class MainActivity extends Activity {
+              static volatile boolean visible;
+
+              private static final int REQ_FILE = 1, REQ_MEDIA = 2, REQ_NOTIF = 3, REQ_STORAGE = 4;
+
+              WebView web;
+              private FrameLayout root;
+              private View customView;
+              private WebChromeClient.CustomViewCallback customCb;
+              private ValueCallback<Uri[]> fileCb;
+              private PermissionRequest pendingPerm;
+              private String[] pendingDownload;
+              private boolean offline;
+              volatile boolean pageReady;
+              volatile String curUrl = "";
+              private AudioManager am;
+              private PowerManager.WakeLock proximity;
+              private boolean inCall, speaker;
+              private ConnectivityManager.NetworkCallback netCb;
+
+              @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
+              @Override
+              protected void onCreate(Bundle state) {
+                  super.onCreate(state);
+                  Notifier.channels(this);
+                  am = (AudioManager) getSystemService(AUDIO_SERVICE);
+
+                  root = new FrameLayout(this);
+                  root.setBackgroundColor(Color.parseColor("#0b1530"));
+                  web = new WebView(this);
+                  web.setBackgroundColor(Color.parseColor("#0b1530"));
+                  root.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                  setContentView(root);
+
+                  WebSettings s = web.getSettings();
+                  s.setJavaScriptEnabled(true);
+                  s.setDomStorageEnabled(true);
+                  s.setDatabaseEnabled(true);
+                  s.setMediaPlaybackRequiresUserGesture(false);
+                  s.setAllowFileAccess(false);
+                  s.setAllowContentAccess(false);
+                  s.setSupportZoom(false);
+                  s.setBuiltInZoomControls(false);
+                  s.setTextZoom(100);
+                  s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+                  s.setJavaScriptCanOpenWindowsAutomatically(false);
+                  s.setSupportMultipleWindows(false);
+                  // сайт узнаёт, что он внутри приложения (и по объекту window.TSAppNative)
+                  s.setUserAgentString(s.getUserAgentString() + " " + Net.UA);
+                  WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
+
+                  CookieManager cm = CookieManager.getInstance();
+                  cm.setAcceptCookie(true);
+                  cm.setAcceptThirdPartyCookies(web, false);
+
+                  web.addJavascriptInterface(new Bridge(this), "TSAppNative");
+                  web.setWebViewClient(new Client());
+                  web.setWebChromeClient(new Chrome());
+                  web.setDownloadListener((url, ua, cd, mime, len) -> download(url, cd, mime));
+
+                  watchNetwork();
+                  web.loadUrl(startUrl(getIntent()));
+              }
+
+              /* ---------------- адреса и переходы ---------------- */
+
+              private String startUrl(Intent i) {
+                  Uri d = i != null ? i.getData() : null;
+                  if (d != null && "https".equals(d.getScheme()) && Net.HOST.equals(d.getHost())) return d.toString();
+                  int chat = i != null ? i.getIntExtra("chat", 0) : 0;
+                  return Net.SITE + "/" + (chat > 0 ? "#chat=" + chat : "");
+              }
+
+              @Override
+              protected void onNewIntent(Intent i) {
+                  super.onNewIntent(i);
+                  setIntent(i);
+                  Uri d = i.getData();
+                  int chat = i.getIntExtra("chat", 0);
+                  if (i.getStringExtra("call") != null) showOverLock(true);
+                  if (d != null && "https".equals(d.getScheme()) && Net.HOST.equals(d.getHost())) {
+                      web.loadUrl(d.toString());
+                  } else if (chat > 0) {
+                      if (pageReady) web.evaluateJavascript("window.TSAppOpenChat&&TSAppOpenChat(" + chat + ")", null);
+                      else web.loadUrl(startUrl(i));
+                  }
+              }
+
+              /** Входящий звонок: показать приложение поверх экрана блокировки. */
+              private void showOverLock(boolean on) {
+                  if (Build.VERSION.SDK_INT >= 27) { setShowWhenLocked(on); setTurnScreenOn(on); }
+                  else {
+                      int f = WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON;
+                      if (on) getWindow().addFlags(f); else getWindow().clearFlags(f);
+                  }
+              }
+
+              boolean onMainSite() {
+                  Uri u = Uri.parse(curUrl == null ? "" : curUrl);
+                  return "https".equals(u.getScheme()) && Net.HOST.equals(u.getHost());
+              }
+
+              private void openExternal(Uri u) {
+                  try {
+                      startActivity(new Intent(Intent.ACTION_VIEW, u).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                  } catch (ActivityNotFoundException e) {
+                      Toast.makeText(this, "Нет приложения, чтобы открыть ссылку", Toast.LENGTH_SHORT).show();
+                  }
+              }
+
+              private class Client extends WebViewClient {
+                  @Override
+                  public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
+                      Uri u = r.getUrl();
+                      String sc = u.getScheme() == null ? "" : u.getScheme();
+                      if (("https".equals(sc)) && Net.ourHost(u.getHost())) return false;     // наш сайт — внутри приложения
+                      if ("http".equals(sc) || "https".equals(sc) || "mailto".equals(sc) || "tel".equals(sc)) openExternal(u);
+                      return true;                                                               // всё прочее — не открываем
+                  }
+
+                  @Override
+                  public void onPageStarted(WebView v, String url, Bitmap fav) {
+                      curUrl = url;
+                      pageReady = false;
+                  }
+
+                  @Override
+                  public void doUpdateVisitedHistory(WebView v, String url, boolean reload) { curUrl = url; }
+
+                  @Override
+                  public void onPageFinished(WebView v, String url) {
+                      curUrl = url;
+                      CookieManager.getInstance().flush();
+                  }
+
+                  @Override
+                  public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
+                      if (r.isForMainFrame()) showOffline();
+                  }
+              }
+
+              /* ---------------- нет сети ---------------- */
+
+              private void showOffline() {
+                  offline = true;
+                  String html = "<!DOCTYPE html><html><head><meta name=viewport content='width=device-width,initial-scale=1'><style>"
+                          + "body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0b1530;color:#fff;"
+                          + "font:16px system-ui,sans-serif;text-align:center}.b{margin-top:22px;padding:13px 26px;border:0;border-radius:14px;"
+                          + "background:linear-gradient(135deg,#7c8cff,#ff7ab6);color:#fff;font:inherit;font-weight:bold}"
+                          + ".i{width:84px;height:84px;margin:0 auto 18px;border-radius:26px;display:flex;align-items:center;justify-content:center;"
+                          + "background:rgba(255,255,255,.08);font-size:40px;animation:p 2s ease-in-out infinite}@keyframes p{50%{transform:scale(1.07)}}"
+                          + "</style></head><body><div><div class=i>📡</div><h2 style='margin:0 0 8px'>Нет подключения</h2>"
+                          + "<div style='opacity:.7;line-height:1.5'>Проверьте интернет — мессенджер<br>откроется сам, когда сеть появится.</div>"
+                          + "<button class=b onclick=\"location.href='" + Net.SITE + "/'\">Повторить</button></div></body></html>";
+                  web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null);
+              }
+
+              private void watchNetwork() {
+                  ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+                  netCb = new ConnectivityManager.NetworkCallback() {
+                      @Override public void onAvailable(Network n) {
+                          runOnUiThread(() -> { if (offline) { offline = false; web.loadUrl(Net.SITE + "/"); } });
+                      }
+                  };
+                  try { cm.registerDefaultNetworkCallback(netCb); } catch (Exception ignored) { }
+              }
+
+              /* ---------------- камера, микрофон, файлы, видео на весь экран ---------------- */
+
+              private class Chrome extends WebChromeClient {
+                  @Override
+                  public void onPermissionRequest(PermissionRequest r) {
+                      runOnUiThread(() -> {
+                          Uri o = r.getOrigin();
+                          if (o == null || !Net.HOST.equals(o.getHost())) { r.deny(); return; }
+                          List<String> need = new ArrayList<>();
+                          for (String res : r.getResources()) {
+                              if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(res)) need.add(Manifest.permission.RECORD_AUDIO);
+                              else if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(res)) need.add(Manifest.permission.CAMERA);
+                          }
+                          if (need.isEmpty()) { r.deny(); return; }
+                          List<String> missing = new ArrayList<>();
+                          for (String p : need) if (checkSelfPermission(p) != PackageManager.PERMISSION_GRANTED) missing.add(p);
+                          if (missing.isEmpty()) { grantMedia(r); return; }
+                          if (pendingPerm != null) pendingPerm.deny();
+                          pendingPerm = r;
+                          requestPermissions(missing.toArray(new String[0]), REQ_MEDIA);
+                      });
+                  }
+
+                  @Override
+                  public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
+                      if (fileCb != null) fileCb.onReceiveValue(null);
+                      fileCb = cb;
+                      Intent i = p.createIntent();
+                      if (p.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE) i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                      try {
+                          startActivityForResult(Intent.createChooser(i, "Выберите файл"), REQ_FILE);
+                      } catch (ActivityNotFoundException e) {
+                          fileCb = null;
+                          return false;
+                      }
+                      return true;
+                  }
+
+                  @Override
+                  public void onShowCustomView(View view, CustomViewCallback cb) {
+                      if (customView != null) { cb.onCustomViewHidden(); return; }
+                      customView = view;
+                      customCb = cb;
+                      root.addView(view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                      web.setVisibility(View.GONE);
+                      immersive(true);
+                  }
+
+                  @Override
+                  public void onHideCustomView() {
+                      if (customView == null) return;
+                      root.removeView(customView);
+                      customView = null;
+                      web.setVisibility(View.VISIBLE);
+                      immersive(false);
+                      if (customCb != null) customCb.onCustomViewHidden();
+                      customCb = null;
+                  }
+
+                  @Override
+                  public Bitmap getDefaultVideoPoster() {
+                      return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);      // без серого значка «play» до загрузки видео
+                  }
+              }
+
+              private void grantMedia(PermissionRequest r) {
+                  List<String> ok = new ArrayList<>();
+                  for (String res : r.getResources()) {
+                      if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(res) && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) ok.add(res);
+                      if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(res) && checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) ok.add(res);
+                  }
+                  if (ok.isEmpty()) r.deny(); else r.grant(ok.toArray(new String[0]));
+              }
+
+              @SuppressWarnings("deprecation")
+              private void immersive(boolean on) {
+                  View d = getWindow().getDecorView();
+                  d.setSystemUiVisibility(on ? (View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY) : 0);
+                  if (!on) applyBars();
+              }
+
+              @Override
+              protected void onActivityResult(int req, int res, Intent data) {
+                  super.onActivityResult(req, res, data);
+                  if (req != REQ_FILE || fileCb == null) return;
+                  Uri[] out = null;
+                  if (res == RESULT_OK && data != null) {
+                      if (data.getClipData() != null) {
+                          int n = data.getClipData().getItemCount();
+                          out = new Uri[n];
+                          for (int i = 0; i < n; i++) out[i] = data.getClipData().getItemAt(i).getUri();
+                      } else if (data.getData() != null) {
+                          out = new Uri[]{data.getData()};
+                      }
+                  }
+                  fileCb.onReceiveValue(out);
+                  fileCb = null;
+              }
+
+              @Override
+              public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
+                  super.onRequestPermissionsResult(req, perms, res);
+                  if (req == REQ_MEDIA && pendingPerm != null) {
+                      grantMedia(pendingPerm);
+                      pendingPerm = null;
+                  } else if (req == REQ_NOTIF) {
+                      Prefs.setNotifAsked(this);
+                      emit("notif", "state", notifState());
+                      if (Notifier.enabled(this)) PushService.startIfNeeded(this);
+                  } else if (req == REQ_STORAGE && pendingDownload != null) {
+                      String[] d = pendingDownload;
+                      pendingDownload = null;
+                      if (res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED) download(d[0], d[1], d[2]);
+                  }
+              }
+
+              /* ---------------- скачивание файлов ---------------- */
+
+              private void download(String url, String cd, String mime) {
+                  Uri u = Uri.parse(url);
+                  if (!"https".equals(u.getScheme()) || !Net.ourHost(u.getHost())) { openExternal(u); return; }
+                  if (Build.VERSION.SDK_INT < 29 && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                      pendingDownload = new String[]{url, cd, mime};
+                      requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQ_STORAGE);
+                      return;
+                  }
+                  String name = URLUtil.guessFileName(url, cd, mime);
+                  try {
+                      DownloadManager.Request r = new DownloadManager.Request(u)
+                              .addRequestHeader("Cookie", CookieManager.getInstance().getCookie(url))
+                              .addRequestHeader("User-Agent", web.getSettings().getUserAgentString())
+                              .setTitle(name)
+                              .setMimeType(mime)
+                              .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                              .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name);
+                      ((DownloadManager) getSystemService(DOWNLOAD_SERVICE)).enqueue(r);
+                      Toast.makeText(this, "Скачивается: " + name, Toast.LENGTH_SHORT).show();
+                  } catch (Exception e) {
+                      Toast.makeText(this, "Не удалось скачать файл", Toast.LENGTH_SHORT).show();
+                  }
+              }
+
+              /* ---------------- жизненный цикл ---------------- */
+
+              @Override
+              protected void onResume() {
+                  super.onResume();
+                  visible = true;
+                  Notifier.clearMessages(this);
+                  if (Updater.waitingPermission && Build.VERSION.SDK_INT >= 26 && getPackageManager().canRequestPackageInstalls()) {
+                      Updater.install(this, this::emit);
+                  }
+                  if (pageReady) emit("resume", "x", "1");
+              }
+
+              @Override
+              protected void onPause() {
+                  super.onPause();
+                  visible = false;
+                  CookieManager.getInstance().flush();
+                  if (!inCall) showOverLock(false);
+              }
+
+              @Override
+              protected void onDestroy() {
+                  try { ((ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE)).unregisterNetworkCallback(netCb); } catch (Exception ignored) { }
+                  callState(false, false);
+                  if (web != null) { root.removeView(web); web.destroy(); }
+                  super.onDestroy();
+              }
+
+              @SuppressWarnings("deprecation")
+              @Override
+              public void onBackPressed() {
+                  if (customView != null) { new Chrome().onHideCustomView(); return; }
+                  web.evaluateJavascript("(window.TSAppBack&&TSAppBack())===true", v -> {
+                      if ("true".equals(v)) return;
+                      if (web.canGoBack() && !offline) web.goBack();
+                      else moveTaskToBack(true);
+                  });
+              }
+
+              /* ---------------- вызовы из моста ---------------- */
+
+              /** Событие для сайта: window.__tsApp({t: ...}). */
+              void emit(JSONObject ev) {
+                  runOnUiThread(() -> { if (web != null && onMainSite()) web.evaluateJavascript("window.__tsApp&&__tsApp(" + ev + ")", null); });
+              }
+
+              void emit(String t, String k, Object v) {
+                  try { emit(new JSONObject().put("t", t).put(k, v)); } catch (Exception ignored) { }
+              }
+
+              String notifState() {
+                  if (Notifier.enabled(this)) return "granted";
+                  if (Build.VERSION.SDK_INT >= 33) {
+                      if (!Prefs.notifAsked(this) || shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) return "default";
+                  }
+                  return "denied";
+              }
+
+              void requestNotifications() {
+                  if (Notifier.enabled(this)) { emit("notif", "state", "granted"); return; }
+                  if (Build.VERSION.SDK_INT >= 33 && !"denied".equals(notifState())) {
+                      requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIF);
+                  } else {
+                      openNotificationSettings();
+                      emit("notif", "state", notifState());
+                  }
+              }
+
+              void openNotificationSettings() {
+                  Intent i;
+                  if (Build.VERSION.SDK_INT >= 26) {
+                      i = new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
+                  } else {
+                      i = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()));
+                  }
+                  try { startActivity(i); } catch (Exception ignored) { }
+              }
+
+              boolean batteryExempt() {
+                  PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+                  return pm.isIgnoringBatteryOptimizations(getPackageName());
+              }
+
+              @SuppressLint("BatteryLife")
+              void requestBatteryExemption() {
+                  try {
+                      startActivity(new Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getPackageName())));
+                  } catch (Exception e) {
+                      try { startActivity(new Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)); } catch (Exception ignored) { }
+                  }
+              }
+
+              /* ---------------- звонок: режим разговора, динамик, экран ---------------- */
+
+              @SuppressWarnings("deprecation")
+              void callState(boolean active, boolean video) {
+                  if (active == inCall) { if (active) setSpeaker(video || speaker); return; }
+                  inCall = active;
+                  if (active) {
+                      getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                      am.setMode(AudioManager.MODE_IN_COMMUNICATION);
+                      setSpeaker(video);
+                  } else {
+                      getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                      if (Build.VERSION.SDK_INT >= 31) am.clearCommunicationDevice(); else am.setSpeakerphoneOn(false);
+                      am.setMode(AudioManager.MODE_NORMAL);
+                      speaker = false;
+                      proximity(false);
+                      showOverLock(false);
+                  }
+              }
+
+              @SuppressWarnings("deprecation")
+              void setSpeaker(boolean on) {
+                  speaker = on;
+                  if (Build.VERSION.SDK_INT >= 31) {
+                      AudioDeviceInfo pick = null;
+                      for (AudioDeviceInfo d : am.getAvailableCommunicationDevices()) {
+                          int t = d.getType();
+                          if (on && t == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) pick = d;
+                          if (!on && (t == AudioDeviceInfo.TYPE_WIRED_HEADSET || t == AudioDeviceInfo.TYPE_WIRED_HEADPHONES
+                                  || t == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || t == AudioDeviceInfo.TYPE_BLE_HEADSET || t == AudioDeviceInfo.TYPE_USB_HEADSET)) pick = d;
+                      }
+                      if (!on && pick == null) {
+                          for (AudioDeviceInfo d : am.getAvailableCommunicationDevices()) if (d.getType() == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE) pick = d;
+                      }
+                      if (pick != null) am.setCommunicationDevice(pick); else am.clearCommunicationDevice();
+                  } else {
+                      am.setSpeakerphoneOn(on);
+                  }
+                  proximity(inCall && !on);
+              }
+
+              boolean isSpeaker() { return speaker; }
+
+              /** Во время разговора у уха экран гаснет (датчик приближения). */
+              private void proximity(boolean on) {
+                  PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+                  if (on) {
+                      if (proximity == null && pm.isWakeLockLevelSupported(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK)) {
+                          proximity = pm.newWakeLock(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, "ts:proximity");
+                      }
+                      if (proximity != null && !proximity.isHeld()) proximity.acquire(4 * 60 * 60 * 1000L);
+                  } else if (proximity != null && proximity.isHeld()) {
+                      proximity.release();
+                  }
+              }
+
+              /* ---------------- цвет системных панелей — как у сайта ---------------- */
+
+              private int barColor = Color.parseColor("#0f0f12");
+              private boolean barLight;
+
+              void setTheme(String hex, boolean light) {
+                  try { barColor = Color.parseColor(hex); } catch (Exception e) { return; }
+                  barLight = light;
+                  applyBars();
+              }
+
+              @SuppressWarnings("deprecation")
+              private void applyBars() {
+                  Window w = getWindow();
+                  w.setStatusBarColor(barColor);
+                  w.setNavigationBarColor(barColor);
+                  int f = 0;
+                  if (barLight) {
+                      f |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+                      if (Build.VERSION.SDK_INT >= 26) f |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+                  }
+                  w.getDecorView().setSystemUiVisibility(f);
+                  root.setBackgroundColor(barColor);
+              }
+
+              /* ---------------- готовность страницы ---------------- */
+
+              void onPageReady(boolean notifPref) {
+                  pageReady = true;
+                  Prefs.setLoggedIn(this, true);
+                  Prefs.setEnabled(this, notifPref);
+                  PushService.kick(this);
+                  Intent i = getIntent();
+                  if (i != null && i.getIntExtra("chat", 0) > 0) {
+                      int chat = i.getIntExtra("chat", 0);
+                      i.removeExtra("chat");
+                      runOnUiThread(() -> web.evaluateJavascript("window.TSAppOpenChat&&TSAppOpenChat(" + chat + ")", null));
+                  }
+                  // обновления — не чаще раза в 6 часов, тихо (окно покажет сайт)
+                  if (System.currentTimeMillis() - Prefs.lastUpdateCheck(this) > 6 * 3600 * 1000L) {
+                      Updater.check(this, false, this::emit);
+                  }
+              }
+
+              void sessionChanged() {
+                  Prefs.setLoggedIn(this, false);
+                  PushService.stop(this);
+                  Notifier.clearMessages(this);
+              }
+
+              static boolean has(Context c, String perm) {
+                  return c.checkSelfPermission(perm) == PackageManager.PERMISSION_GRANTED;
+              }
+          }
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/java/com/topsstudio/messenger/Net.java")"
+          cat > app/src/main/java/com/topsstudio/messenger/Net.java <<'TSEOF'
+          package com.topsstudio.messenger;
+
+          import android.net.Uri;
+          import android.webkit.CookieManager;
+
+          import java.util.concurrent.TimeUnit;
+
+          import okhttp3.MediaType;
+          import okhttp3.OkHttpClient;
+          import okhttp3.Request;
+          import okhttp3.RequestBody;
+          import okhttp3.Response;
+
+          /** Запросы к серверу мессенджера от имени вошедшего пользователя (cookie из WebView). */
+          final class Net {
+              private Net() { }
+
+              static final String SITE = BuildConfig.SITE;
+              static final String HOST = Uri.parse(SITE).getHost();
+              static final String UA = "TSMessengerApp/" + BuildConfig.VERSION_NAME + " (Android)";
+
+              private static OkHttpClient client;
+
+              static synchronized OkHttpClient http() {
+                  if (client == null) {
+                      client = new OkHttpClient.Builder()
+                              .connectTimeout(15, TimeUnit.SECONDS)
+                              .readTimeout(30, TimeUnit.SECONDS)
+                              .pingInterval(30, TimeUnit.SECONDS)
+                              .build();
+                  }
+                  return client;
+              }
+
+              static String cookie() {
+                  try { return CookieManager.getInstance().getCookie(SITE); } catch (Throwable e) { return null; }
+              }
+
+              /** Есть ли сессия (cookie msid). */
+              static boolean hasSession() {
+                  String c = cookie();
+                  return c != null && c.contains("msid=");
+              }
+
+              /** Только наш сайт и его поддомены (m., voicem., adminm.). */
+              static boolean ourHost(String host) {
+                  if (host == null) return false;
+                  String root = HOST.contains(".") ? HOST.substring(HOST.indexOf('.') + 1) : HOST;
+                  return host.equals(HOST) || host.equals(root) || host.endsWith("." + root);
+              }
+
+              /** POST JSON к API (те же заголовки, что у сайта: защита от подделки запросов). */
+              static int postJson(String path, String json) {
+                  String c = cookie();
+                  if (c == null) return 401;
+                  Request r = new Request.Builder()
+                          .url(SITE + path)
+                          .header("Cookie", c)
+                          .header("Origin", SITE)
+                          .header("X-Requested-With", "ts")
+                          .header("User-Agent", UA)
+                          .post(RequestBody.create(json, MediaType.get("application/json; charset=utf-8")))
+                          .build();
+                  try (Response resp = http().newCall(r).execute()) {
+                      return resp.code();
+                  } catch (Exception e) {
+                      return -1;
+                  }
+              }
+          }
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/java/com/topsstudio/messenger/Notifier.java")"
+          cat > app/src/main/java/com/topsstudio/messenger/Notifier.java <<'TSEOF'
+          package com.topsstudio.messenger;
+
+          import android.app.Notification;
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.app.RemoteInput;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.graphics.Color;
+          import android.media.AudioAttributes;
+          import android.media.RingtoneManager;
+          import android.net.Uri;
+          import android.os.Build;
+
+          import org.json.JSONObject;
+
+          import java.util.ArrayList;
+          import java.util.HashMap;
+          import java.util.Iterator;
+          import java.util.List;
+          import java.util.Map;
+
+          /** Все уведомления приложения: сообщения (с ответом прямо из шторки), звонки, фоновое подключение. */
+          final class Notifier {
+              private Notifier() { }
+
+              static final String CH_MSG = "messages";
+              static final String CH_CALL = "calls";
+              static final String CH_BG = "background";
+              static final String CH_UPD = "updates";
+              static final String GROUP = "ts_messages";
+              static final int ID_BG = 1;
+              static final int ID_SUMMARY = 2;
+              static final int ID_UPDATE = 3;
+              static final int ACCENT = 0xFF7C8CFF;
+
+              /** Последние сообщения по чатам — чтобы в уведомлении была переписка, а не одна строка. */
+              private static final class Line {
+                  final long id; final String sender; final String text; final long ts;
+                  Line(long id, String sender, String text, long ts) { this.id = id; this.sender = sender; this.text = text; this.ts = ts; }
+              }
+              private static final class ChatN {
+                  String title; boolean group; long lastId; final List<Line> lines = new ArrayList<>();
+              }
+              private static final Map<Integer, ChatN> chats = new HashMap<>();
+
+              static NotificationManager nm(Context c) {
+                  return (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+              }
+
+              static void channels(Context c) {
+                  if (Build.VERSION.SDK_INT < 26) return;
+                  NotificationManager m = nm(c);
+                  NotificationChannel msg = new NotificationChannel(CH_MSG, "Сообщения", NotificationManager.IMPORTANCE_HIGH);
+                  msg.setDescription("Новые сообщения в чатах");
+                  msg.enableLights(true);
+                  msg.setLightColor(ACCENT);
+                  msg.enableVibration(true);
+                  msg.setShowBadge(true);
+                  m.createNotificationChannel(msg);
+
+                  NotificationChannel call = new NotificationChannel(CH_CALL, "Звонки", NotificationManager.IMPORTANCE_HIGH);
+                  call.setDescription("Входящие звонки");
+                  Uri ring = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE);
+                  call.setSound(ring, new AudioAttributes.Builder()
+                          .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                          .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
+                  call.enableVibration(true);
+                  call.setVibrationPattern(new long[]{0, 800, 600, 800, 600, 800});
+                  call.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+                  m.createNotificationChannel(call);
+
+                  NotificationChannel bg = new NotificationChannel(CH_BG, "Фоновое подключение", NotificationManager.IMPORTANCE_MIN);
+                  bg.setDescription("Нужно, чтобы сообщения приходили, когда приложение закрыто. Это уведомление можно скрыть.");
+                  bg.setShowBadge(false);
+                  m.createNotificationChannel(bg);
+
+                  NotificationChannel upd = new NotificationChannel(CH_UPD, "Обновления", NotificationManager.IMPORTANCE_DEFAULT);
+                  upd.setDescription("Новые версии приложения");
+                  m.createNotificationChannel(upd);
+              }
+
+              @SuppressWarnings("deprecation")
+              static Notification.Builder builder(Context c, String channel) {
+                  Notification.Builder b = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(c, channel) : new Notification.Builder(c);
+                  b.setSmallIcon(R.drawable.ic_stat).setColor(ACCENT);
+                  if (Build.VERSION.SDK_INT < 26) {
+                      b.setPriority(CH_BG.equals(channel) ? Notification.PRIORITY_MIN : Notification.PRIORITY_HIGH);
+                      if (CH_MSG.equals(channel)) b.setDefaults(Notification.DEFAULT_ALL);
+                  }
+                  return b;
+              }
+
+              static int piFlags(boolean mutable) {
+                  int f = PendingIntent.FLAG_UPDATE_CURRENT;
+                  if (Build.VERSION.SDK_INT >= 31) f |= mutable ? PendingIntent.FLAG_MUTABLE : PendingIntent.FLAG_IMMUTABLE;
+                  else if (Build.VERSION.SDK_INT >= 23 && !mutable) f |= PendingIntent.FLAG_IMMUTABLE;
+                  return f;
+              }
+
+              static PendingIntent openApp(Context c, int chat, String call) {
+                  Intent i = new Intent(c, MainActivity.class)
+                          .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                  if (chat > 0) i.putExtra("chat", chat);
+                  if (call != null) i.putExtra("call", call);
+                  return PendingIntent.getActivity(c, (call != null ? 500000 : 0) + chat, i, piFlags(false));
+              }
+
+              /* ---------------- сообщения ---------------- */
+
+              /** n: {chat, id, ts, title, sender, text, group} — с сервера (фоновое подключение). */
+              @SuppressWarnings("deprecation")
+              static synchronized void message(Context c, JSONObject n) {
+                  if (!Prefs.enabled(c)) return;
+                  int chat = n.optInt("chat");
+                  if (chat <= 0) return;
+                  ChatN cn = chats.get(chat);
+                  if (cn == null) { cn = new ChatN(); chats.put(chat, cn); }
+                  cn.title = n.optString("title", "Сообщение");
+                  cn.group = n.optBoolean("group");
+                  long id = n.optLong("id");
+                  cn.lastId = Math.max(cn.lastId, id);
+                  String text = Prefs.showText(c) ? n.optString("text", "") : "Новое сообщение";
+                  String sender = n.optString("sender", "");
+                  cn.lines.add(new Line(id, sender.isEmpty() ? cn.title : sender, text, n.optLong("ts", System.currentTimeMillis() / 1000) * 1000));
+                  while (cn.lines.size() > 8) cn.lines.remove(0);
+                  post(c, chat, cn, true);
+              }
+
+              @SuppressWarnings("deprecation")
+              private static void post(Context c, int chat, ChatN cn, boolean alert) {
+                  Notification.MessagingStyle st = new Notification.MessagingStyle("Вы");
+                  if (cn.group) st.setConversationTitle(cn.title);
+                  if (Build.VERSION.SDK_INT >= 28) st.setGroupConversation(cn.group);
+                  for (Line l : cn.lines) st.addMessage(l.text, l.ts, l.sender);
+                  Line last = cn.lines.isEmpty() ? null : cn.lines.get(cn.lines.size() - 1);
+
+                  Notification.Builder b = builder(c, CH_MSG)
+                          .setStyle(st)
+                          .setContentTitle(cn.title)
+                          .setContentText(last != null ? last.text : "")
+                          .setAutoCancel(true)
+                          .setOnlyAlertOnce(!alert)
+                          .setCategory(Notification.CATEGORY_MESSAGE)
+                          .setGroup(GROUP)
+                          .setNumber(cn.lines.size())
+                          .setShowWhen(true)
+                          .setWhen(last != null ? last.ts : System.currentTimeMillis())
+                          .setContentIntent(openApp(c, chat, null))
+                          .setDeleteIntent(action(c, "dismiss", chat, 0));
+
+                  // «Ответить» прямо из шторки и «Прочитано»
+                  RemoteInput ri = new RemoteInput.Builder(ActionReceiver.KEY_TEXT).setLabel("Сообщение…").build();
+                  Notification.Action reply = new Notification.Action.Builder(
+                          android.graphics.drawable.Icon.createWithResource(c, R.drawable.ic_stat), "Ответить",
+                          actionMutable(c, "reply", chat, cn.lastId)).addRemoteInput(ri).build();
+                  Notification.Action read = new Notification.Action.Builder(
+                          android.graphics.drawable.Icon.createWithResource(c, R.drawable.ic_stat), "Прочитано",
+                          action(c, "read", chat, cn.lastId)).build();
+                  b.addAction(reply).addAction(read);
+
+                  nm(c).notify(chatId(chat), b.build());
+                  summary(c);
+              }
+
+              private static int chatId(int chat) { return 100000 + chat; }
+
+              private static PendingIntent action(Context c, String what, int chat, long msg) {
+                  Intent i = new Intent(c, ActionReceiver.class).setAction("ts." + what)
+                          .putExtra("chat", chat).putExtra("msg", msg);
+                  return PendingIntent.getBroadcast(c, (what.hashCode() & 0xffff) * 31 + chat, i, piFlags(false));
+              }
+
+              private static PendingIntent actionMutable(Context c, String what, int chat, long msg) {
+                  Intent i = new Intent(c, ActionReceiver.class).setAction("ts." + what)
+                          .putExtra("chat", chat).putExtra("msg", msg);
+                  return PendingIntent.getBroadcast(c, (what.hashCode() & 0xffff) * 31 + chat, i, piFlags(true));
+              }
+
+              /** Общая «папка» уведомлений сообщений (Android группирует их под ней). */
+              private static void summary(Context c) {
+                  if (chats.isEmpty()) { nm(c).cancel(ID_SUMMARY); return; }
+                  int total = 0;
+                  for (ChatN cn : chats.values()) total += cn.lines.size();
+                  Notification.Builder b = builder(c, CH_MSG)
+                          .setContentTitle("TS Messenger")
+                          .setContentText(total + " новых сообщений")
+                          .setGroup(GROUP).setGroupSummary(true)
+                          .setOnlyAlertOnce(true)
+                          .setAutoCancel(true)
+                          .setContentIntent(openApp(c, 0, null));
+                  if (Build.VERSION.SDK_INT >= 26) b.setGroupAlertBehavior(Notification.GROUP_ALERT_CHILDREN);
+                  nm(c).notify(ID_SUMMARY, b.build());
+              }
+
+              /** Добавить свой ответ в уведомление (после «Ответить» из шторки). */
+              static synchronized void addOwnReply(Context c, int chat, String text) {
+                  ChatN cn = chats.get(chat);
+                  if (cn == null) return;
+                  cn.lines.add(new Line(0, "Вы", text, System.currentTimeMillis()));
+                  post(c, chat, cn, false);
+              }
+
+              /** Сообщение удалили — убираем его из уведомления. */
+              static synchronized void removeMessage(Context c, int chat, long id) {
+                  ChatN cn = chats.get(chat);
+                  if (cn == null) return;
+                  for (Iterator<Line> it = cn.lines.iterator(); it.hasNext(); ) if (it.next().id == id) it.remove();
+                  if (cn.lines.isEmpty()) cancelChat(c, chat); else post(c, chat, cn, false);
+              }
+
+              /** Чат прочитан (здесь или на другом устройстве). */
+              static synchronized void cancelChat(Context c, int chat) {
+                  chats.remove(chat);
+                  nm(c).cancel(chatId(chat));
+                  summary(c);
+              }
+
+              static synchronized void forget(int chat) { chats.remove(chat); }
+
+              /** Открыли приложение — сообщения больше не висят в шторке. */
+              static synchronized void clearMessages(Context c) {
+                  for (Integer chat : new ArrayList<>(chats.keySet())) nm(c).cancel(chatId(chat));
+                  chats.clear();
+                  nm(c).cancel(ID_SUMMARY);
+              }
+
+              /** Уведомление от самого сайта (когда фоновое подключение выключено, а приложение свёрнуто). */
+              static synchronized void simple(Context c, String title, String body, int chat) {
+                  if (!Prefs.enabled(c)) return;
+                  JSONObject n = new JSONObject();
+                  try {
+                      n.put("chat", chat > 0 ? chat : 0).put("title", title).put("text", body)
+                              .put("id", System.currentTimeMillis()).put("ts", System.currentTimeMillis() / 1000);
+                  } catch (Exception ignored) { }
+                  if (chat > 0) { message(c, n); return; }
+                  Notification.Builder b = builder(c, CH_MSG).setContentTitle(title).setContentText(body)
+                          .setAutoCancel(true).setContentIntent(openApp(c, 0, null));
+                  nm(c).notify((int) (System.currentTimeMillis() % 90000) + 10, b.build());
+              }
+
+              /* ---------------- звонки ---------------- */
+
+              static int callId(String call) { return 900000 + (call.hashCode() & 0xffff); }
+
+              /** Входящий звонок: экран поверх блокировки, мелодия звонка, «Ответить» / «Отклонить». */
+              static void call(Context c, JSONObject n) {
+                  if (!Prefs.enabled(c)) return;
+                  String call = n.optString("call");
+                  int chat = n.optInt("chat");
+                  boolean video = n.optBoolean("video");
+                  String who = n.optString("title", "Звонок");
+                  PendingIntent open = openApp(c, chat, call);
+                  Intent dec = new Intent(c, ActionReceiver.class).setAction("ts.decline").putExtra("call", call);
+                  PendingIntent decline = PendingIntent.getBroadcast(c, callId(call), dec, piFlags(false));
+                  Notification.Builder b = builder(c, CH_CALL)
+                          .setContentTitle(who)
+                          .setContentText(video ? "Входящий видеозвонок" : (n.optBoolean("group") ? "Звонок в группе · " + n.optString("from") : "Входящий звонок"))
+                          .setCategory(Notification.CATEGORY_CALL)
+                          .setOngoing(true)
+                          .setAutoCancel(true)
+                          .setVisibility(Notification.VISIBILITY_PUBLIC)
+                          .setContentIntent(open)
+                          .setFullScreenIntent(open, true)
+                          .addAction(new Notification.Action.Builder(null, "Отклонить", decline).build())
+                          .addAction(new Notification.Action.Builder(null, "Ответить", open).build());
+                  if (Build.VERSION.SDK_INT >= 26) b.setTimeoutAfter(50000);
+                  if (Build.VERSION.SDK_INT < 26) {
+                      b.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE))
+                              .setVibrate(new long[]{0, 800, 600, 800});
+                  }
+                  Notification nt = b.build();
+                  nt.flags |= Notification.FLAG_INSISTENT;          // мелодия повторяется, пока не ответят
+                  nm(c).notify(callId(call), nt);
+              }
+
+              static void callEnd(Context c, String call) {
+                  if (call != null && !call.isEmpty()) nm(c).cancel(callId(call));
+              }
+
+              /* ---------------- фоновое подключение и обновления ---------------- */
+
+              static Notification background(Context c) {
+                  return builder(c, CH_BG)
+                          .setContentTitle("TS Messenger")
+                          .setContentText("Получаем новые сообщения")
+                          .setOngoing(true)
+                          .setShowWhen(false)
+                          .setContentIntent(openApp(c, 0, null))
+                          .build();
+              }
+
+              static void updateAvailable(Context c, String version) {
+                  Notification.Builder b = builder(c, CH_UPD)
+                          .setContentTitle("Доступно обновление")
+                          .setContentText("TS Messenger " + version + " — нажмите, чтобы установить")
+                          .setAutoCancel(true)
+                          .setContentIntent(openApp(c, 0, null));
+                  nm(c).notify(ID_UPDATE, b.build());
+              }
+
+              static boolean enabled(Context c) {
+                  return Build.VERSION.SDK_INT < 24 || nm(c).areNotificationsEnabled();
+              }
+
+              @SuppressWarnings("unused")
+              static int color() { return Color.parseColor("#7c8cff"); }
+          }
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/java/com/topsstudio/messenger/Prefs.java")"
+          cat > app/src/main/java/com/topsstudio/messenger/Prefs.java <<'TSEOF'
+          package com.topsstudio.messenger;
+
+          import android.content.Context;
+          import android.content.SharedPreferences;
+
+          /** Настройки приложения (на устройстве). */
+          final class Prefs {
+              private Prefs() { }
+
+              private static SharedPreferences p(Context c) {
+                  return c.getApplicationContext().getSharedPreferences("ts", Context.MODE_PRIVATE);
+              }
+
+              /** Уведомления вообще включены (переключатель «Уведомления» на сайте). */
+              static boolean enabled(Context c) { return p(c).getBoolean("enabled", true); }
+              static void setEnabled(Context c, boolean v) { p(c).edit().putBoolean("enabled", v).apply(); }
+
+              /** Фоновое подключение — уведомления, когда приложение закрыто. */
+              static boolean background(Context c) { return p(c).getBoolean("background", true); }
+              static void setBackground(Context c, boolean v) { p(c).edit().putBoolean("background", v).apply(); }
+
+              /** Показывать текст сообщений в уведомлениях. */
+              static boolean showText(Context c) { return p(c).getBoolean("show_text", true); }
+              static void setShowText(Context c, boolean v) { p(c).edit().putBoolean("show_text", v).apply(); }
+
+              /** Спрашивали ли уже разрешение на уведомления (Android 13+). */
+              static boolean notifAsked(Context c) { return p(c).getBoolean("notif_asked", false); }
+              static void setNotifAsked(Context c) { p(c).edit().putBoolean("notif_asked", true).apply(); }
+
+              static long lastUpdateCheck(Context c) { return p(c).getLong("upd_check", 0); }
+              static void setLastUpdateCheck(Context c, long t) { p(c).edit().putLong("upd_check", t).apply(); }
+
+              /** Вошёл ли пользователь (по последнему открытию сайта). */
+              static boolean loggedIn(Context c) { return p(c).getBoolean("logged", false); }
+              static void setLoggedIn(Context c, boolean v) { p(c).edit().putBoolean("logged", v).apply(); }
+          }
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/java/com/topsstudio/messenger/PushService.java")"
+          cat > app/src/main/java/com/topsstudio/messenger/PushService.java <<'TSEOF'
+          package com.topsstudio.messenger;
+
+          import android.app.Service;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.pm.ServiceInfo;
+          import android.net.ConnectivityManager;
+          import android.net.Network;
+          import android.os.Build;
+          import android.os.Handler;
+          import android.os.IBinder;
+          import android.os.Looper;
+
+          import org.json.JSONObject;
+
+          import okhttp3.Request;
+          import okhttp3.Response;
+          import okhttp3.WebSocket;
+          import okhttp3.WebSocketListener;
+
+          /**
+           * Фоновое подключение к серверу: уведомления о сообщениях и звонках, когда приложение закрыто.
+           * Сервер шлёт сюда только короткие события "n" и не считает вас «в сети».
+           */
+          public class PushService extends Service {
+              static volatile boolean running;
+
+              private final Handler h = new Handler(Looper.getMainLooper());
+              private WebSocket ws;
+              private long backoff = 2000;
+              private boolean stopped;
+              private int gen;                              // номер подключения — старые события игнорируем
+              private ConnectivityManager.NetworkCallback netCb;
+
+              static boolean shouldRun(Context c) {
+                  return Prefs.enabled(c) && Prefs.background(c) && Prefs.loggedIn(c) && Notifier.enabled(c);
+              }
+
+              static void startIfNeeded(Context c) {
+                  if (!shouldRun(c)) { stop(c); return; }
+                  Intent i = new Intent(c, PushService.class);
+                  try {
+                      if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(i); else c.startService(i);
+                  } catch (Exception ignored) {
+                      // Android может запретить запуск из фона — запустится при следующем открытии приложения
+                  }
+              }
+
+              static void stop(Context c) {
+                  c.stopService(new Intent(c, PushService.class));
+              }
+
+              /** Переподключиться сейчас (например, появилась сеть или вошли в аккаунт). */
+              static void kick(Context c) {
+                  if (running) {
+                      Intent i = new Intent(c, PushService.class).setAction("reconnect");
+                      try { c.startService(i); } catch (Exception ignored) { }
+                  } else startIfNeeded(c);
+              }
+
+              @Override
+              public void onCreate() {
+                  super.onCreate();
+                  Notifier.channels(this);
+                  if (Build.VERSION.SDK_INT >= 34) {
+                      startForeground(Notifier.ID_BG, Notifier.background(this), ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING);
+                  } else {
+                      startForeground(Notifier.ID_BG, Notifier.background(this));
+                  }
+                  running = true;
+                  ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+                  netCb = new ConnectivityManager.NetworkCallback() {
+                      @Override public void onAvailable(Network n) { h.post(() -> { backoff = 2000; reconnect(); }); }
+                  };
+                  try { cm.registerDefaultNetworkCallback(netCb); } catch (Exception ignored) { }
+                  connect();
+                  h.postDelayed(ping, 25000);
+              }
+
+              @Override
+              public int onStartCommand(Intent intent, int flags, int startId) {
+                  if (!shouldRun(this)) { stopSelf(); return START_NOT_STICKY; }
+                  if (intent != null && "reconnect".equals(intent.getAction())) { backoff = 2000; reconnect(); }
+                  return START_STICKY;
+              }
+
+              private final Runnable ping = new Runnable() {
+                  @Override public void run() {
+                      if (ws != null) ws.send("{\"t\":\"ping\"}");
+                      h.postDelayed(this, 25000);
+                  }
+              };
+
+              private void reconnect() {
+                  if (stopped) return;
+                  h.removeCallbacks(retry);
+                  if (ws != null) { ws.cancel(); ws = null; }
+                  connect();
+              }
+
+              private final Runnable retry = this::connect;
+
+              private void schedule() {
+                  if (stopped) return;
+                  h.removeCallbacks(retry);
+                  h.postDelayed(retry, backoff);
+                  backoff = Math.min(backoff * 2, 60000);
+              }
+
+              private void connect() {
+                  if (stopped || ws != null) return;
+                  String cookie = Net.cookie();
+                  if (cookie == null || !cookie.contains("msid=")) { Prefs.setLoggedIn(this, false); stopSelf(); return; }
+                  String url = Net.SITE.replaceFirst("^http", "ws") + "/ws?push=1";
+                  Request r = new Request.Builder().url(url)
+                          .header("Cookie", cookie)
+                          .header("Origin", Net.SITE)
+                          .header("User-Agent", Net.UA)
+                          .build();
+                  final int my = ++gen;
+                  ws = Net.http().newWebSocket(r, new WebSocketListener() {
+                      @Override public void onOpen(WebSocket s, Response resp) { h.post(() -> { if (my == gen) backoff = 2000; }); }
+
+                      @Override public void onMessage(WebSocket s, String text) {
+                          if (my != gen) return;
+                          try { handle(new JSONObject(text)); } catch (Exception ignored) { }
+                      }
+
+                      @Override public void onClosing(WebSocket s, int code, String reason) { s.close(1000, null); }
+
+                      @Override public void onClosed(WebSocket s, int code, String reason) { h.post(() -> dropped(my, code)); }
+
+                      @Override public void onFailure(WebSocket s, Throwable t, Response resp) {
+                          int code = resp != null ? resp.code() : 0;
+                          h.post(() -> dropped(my, code == 403 ? 4003 : 0));
+                      }
+                  });
+              }
+
+              private void dropped(int my, int code) {
+                  if (my != gen) return;
+                  ws = null;
+                  if (code == 4001) {                       // вышли из аккаунта или сессия истекла
+                      Prefs.setLoggedIn(this, false);
+                      stopSelf();
+                      return;
+                  }
+                  schedule();
+              }
+
+              private void handle(JSONObject d) {
+                  if (!"n".equals(d.optString("t"))) return;
+                  String kind = d.optString("kind");
+                  boolean front = MainActivity.visible;
+                  switch (kind) {
+                      case "msg":
+                          if (!front) Notifier.message(this, d);
+                          break;
+                      case "del":
+                          Notifier.removeMessage(this, d.optInt("chat"), d.optLong("id"));
+                          break;
+                      case "read":
+                          Notifier.cancelChat(this, d.optInt("chat"));
+                          break;
+                      case "call":
+                          if (!front) Notifier.call(this, d);
+                          break;
+                      case "call_end":
+                          Notifier.callEnd(this, d.optString("call"));
+                          break;
+                      default:
+                  }
+              }
+
+              @Override
+              public void onDestroy() {
+                  stopped = true;
+                  running = false;
+                  h.removeCallbacksAndMessages(null);
+                  if (ws != null) ws.close(1000, null);
+                  try {
+                      ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+                      if (netCb != null) cm.unregisterNetworkCallback(netCb);
+                  } catch (Exception ignored) { }
+                  super.onDestroy();
+              }
+
+              @Override
+              public IBinder onBind(Intent intent) { return null; }
+          }
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/java/com/topsstudio/messenger/Updater.java")"
+          cat > app/src/main/java/com/topsstudio/messenger/Updater.java <<'TSEOF'
+          package com.topsstudio.messenger;
+
+          import android.app.Activity;
+          import android.app.PendingIntent;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.pm.PackageInfo;
+          import android.content.pm.PackageInstaller;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.provider.Settings;
+
+          import org.json.JSONArray;
+          import org.json.JSONObject;
+
+          import java.io.File;
+          import java.io.FileInputStream;
+          import java.io.FileOutputStream;
+          import java.io.InputStream;
+          import java.io.OutputStream;
+          import java.util.regex.Matcher;
+          import java.util.regex.Pattern;
+
+          import okhttp3.Request;
+          import okhttp3.Response;
+
+          /**
+           * Обновление через GitHub: последний релиз репозитория, файл ts-messenger.apk.
+           * Номер версии — в названии релиза (v123 = versionCode 123). Ставится поверх, данные не теряются.
+           */
+          final class Updater {
+              private Updater() { }
+
+              interface Cb { void event(JSONObject ev); }
+
+              static final String ASSET = "ts-messenger.apk";
+              private static JSONObject latest;            // {code, version, url, size, notes}
+              static volatile boolean waitingPermission;
+              private static volatile boolean busy;
+
+              private static JSONObject ev(String t) {
+                  JSONObject o = new JSONObject();
+                  try { o.put("t", t); } catch (Exception ignored) { }
+                  return o;
+              }
+
+              /** Проверить новую версию. manual — человек сам нажал «Проверить» (сообщаем и «у вас последняя»). */
+              static void check(Context c, boolean manual, Cb cb) {
+                  new Thread(() -> {
+                      try {
+                          Request r = new Request.Builder()
+                                  .url("https://api.github.com/repos/" + BuildConfig.REPO + "/releases/latest")
+                                  .header("Accept", "application/vnd.github+json")
+                                  .header("User-Agent", Net.UA)
+                                  .build();
+                          try (Response resp = Net.http().newCall(r).execute()) {
+                              if (resp.code() == 404) throw new Exception("Релизов пока нет (или репозиторий закрытый)");
+                              if (!resp.isSuccessful()) throw new Exception("GitHub ответил " + resp.code());
+                              JSONObject j = new JSONObject(resp.body().string());
+                              Matcher m = Pattern.compile("(\\d+)").matcher(j.optString("tag_name", ""));
+                              int code = m.find() ? Integer.parseInt(m.group(1)) : 0;
+                              String url = null;
+                              long size = 0;
+                              JSONArray as = j.optJSONArray("assets");
+                              for (int i = 0; as != null && i < as.length(); i++) {
+                                  JSONObject a = as.getJSONObject(i);
+                                  if (ASSET.equals(a.optString("name"))) { url = a.optString("browser_download_url"); size = a.optLong("size"); }
+                              }
+                              Prefs.setLastUpdateCheck(c, System.currentTimeMillis());
+                              if (code > BuildConfig.VERSION_CODE && url != null && url.startsWith("https://github.com/")) {
+                                  latest = new JSONObject().put("code", code).put("version", "1.0." + code)
+                                          .put("url", url).put("size", size).put("notes", j.optString("body", ""));
+                                  JSONObject e = ev("update");
+                                  e.put("version", "1.0." + code).put("size", size).put("notes", j.optString("body", "")).put("silent", !manual);
+                                  cb.event(e);
+                              } else if (manual) {
+                                  cb.event(ev("no_update"));
+                              }
+                          }
+                      } catch (Exception e) {
+                          if (manual) {
+                              JSONObject o = ev("update_error");
+                              try { o.put("error", "Не удалось проверить: " + e.getMessage()); } catch (Exception ignored) { }
+                              cb.event(o);
+                          }
+                      }
+                  }).start();
+              }
+
+              /** Скачать и установить. Нужен разрешённый «Установка неизвестных приложений» для этого приложения. */
+              static void install(Activity a, Cb cb) {
+                  if (busy) return;
+                  if (latest == null) {
+                      check(a, true, e -> { if ("update".equals(e.optString("t"))) a.runOnUiThread(() -> install(a, cb)); else cb.event(e); });
+                      return;
+                  }
+                  if (Build.VERSION.SDK_INT >= 26 && !a.getPackageManager().canRequestPackageInstalls()) {
+                      waitingPermission = true;
+                      cb.event(ev("update_perm"));
+                      Intent i = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + a.getPackageName()));
+                      try { a.startActivity(i); } catch (Exception ignored) { }
+                      return;
+                  }
+                  waitingPermission = false;
+                  busy = true;
+                  final JSONObject L = latest;
+                  new Thread(() -> {
+                      File f = new File(a.getCacheDir(), "update.apk");
+                      try {
+                          Request r = new Request.Builder().url(L.getString("url")).header("User-Agent", Net.UA).build();
+                          try (Response resp = Net.http().newCall(r).execute()) {
+                              if (!resp.isSuccessful()) throw new Exception("скачивание: " + resp.code());
+                              long total = resp.body().contentLength();
+                              if (total <= 0) total = L.optLong("size");
+                              try (InputStream in = resp.body().byteStream(); OutputStream out = new FileOutputStream(f)) {
+                                  byte[] buf = new byte[64 * 1024];
+                                  long done = 0, lastSent = 0;
+                                  int n;
+                                  while ((n = in.read(buf)) > 0) {
+                                      out.write(buf, 0, n);
+                                      done += n;
+                                      if (total > 0 && done - lastSent > total / 50) {
+                                          lastSent = done;
+                                          JSONObject p = ev("update_progress");
+                                          p.put("p", Math.min(1.0, (double) done / total));
+                                          cb.event(p);
+                                      }
+                                  }
+                              }
+                          }
+                          // проверяем, что это наше приложение и оно новее (подпись проверит сам Android)
+                          PackageInfo pi = a.getPackageManager().getPackageArchiveInfo(f.getAbsolutePath(), 0);
+                          if (pi == null || !a.getPackageName().equals(pi.packageName)) throw new Exception("файл повреждён");
+                          long code = Build.VERSION.SDK_INT >= 28 ? pi.getLongVersionCode() : pi.versionCode;
+                          if (code <= BuildConfig.VERSION_CODE) throw new Exception("это не новая версия");
+
+                          PackageInstaller pkg = a.getPackageManager().getPackageInstaller();
+                          PackageInstaller.SessionParams sp = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+                          sp.setAppPackageName(a.getPackageName());
+                          if (Build.VERSION.SDK_INT >= 31) sp.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED);
+                          int sid = pkg.createSession(sp);
+                          try (PackageInstaller.Session s = pkg.openSession(sid)) {
+                              try (InputStream in = new FileInputStream(f); OutputStream out = s.openWrite("app.apk", 0, f.length())) {
+                                  byte[] buf = new byte[64 * 1024];
+                                  int n;
+                                  while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                                  s.fsync(out);
+                              }
+                              Intent done = new Intent(a, InstallReceiver.class).setAction("ts.installed");
+                              PendingIntent pi2 = PendingIntent.getBroadcast(a, sid, done, Notifier.piFlags(true));
+                              s.commit(pi2.getIntentSender());
+                          }
+                          cb.event(ev("update_ready"));
+                      } catch (Exception e) {
+                          JSONObject o = ev("update_error");
+                          try { o.put("error", "Не удалось обновить: " + e.getMessage()); } catch (Exception ignored) { }
+                          cb.event(o);
+                          //noinspection ResultOfMethodCallIgnored
+                          f.delete();
+                      } finally {
+                          busy = false;
+                      }
+                  }).start();
+              }
+          }
+          TSEOF
+
+      - name: Ключ подписи
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: echo "$KEYSTORE_B64" | base64 -d > proj/app/release.jks
+
+      - name: Собрать APK
+        working-directory: proj
+        env:
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: gradle --no-daemon --stacktrace assembleRelease
+
+      - name: Опубликовать релиз
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ github.event.head_commit.message }}
+        run: |
+          cp proj/app/build/outputs/apk/release/app-release.apk ts-messenger.apk
+          [ -n "$NOTES" ] || NOTES="Обновление приложения"
+          gh release create "v$VERSION_CODE" ts-messenger.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "TS Messenger 1.0.$VERSION_CODE" \
+            --notes "$NOTES" \
+            --latest
+          echo "### Готово: TS Messenger 1.0.$VERSION_CODE" >> "$GITHUB_STEP_SUMMARY"
+          echo "Скачать: https://github.com/$GITHUB_REPOSITORY/releases/latest/download/ts-messenger.apk" >> "$GITHUB_STEP_SUMMARY"
