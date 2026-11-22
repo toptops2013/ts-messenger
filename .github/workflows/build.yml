@@ -56,7 +56,7 @@ jobs:
           mkdir -p "$(dirname "build.gradle")"
           cat > build.gradle <<'TSEOF'
           plugins {
-              id 'com.android.application' version '8.5.2' apply false
+              id 'com.android.application' version '8.7.3' apply false
           }
           TSEOF
           mkdir -p "$(dirname "gradle.properties")"
@@ -90,12 +90,12 @@ jobs:
 
           android {
               namespace 'com.topsstudio.messenger'
-              compileSdk 34
+              compileSdk 35
 
               defaultConfig {
                   applicationId "com.topsstudio.messenger"
                   minSdk 24
-                  targetSdk 34
+                  targetSdk 35
                   versionCode vcode
                   versionName "1.0." + vcode
                   buildConfigField "String", "SITE", "\"" + site + "\""
@@ -466,6 +466,12 @@ jobs:
 
               @JavascriptInterface public void setShowText(boolean v) { if (ok()) Prefs.setShowText(a, v); }
 
+              @JavascriptInterface public String mediaState() { return ok() ? a.mediaState() : "{}"; }
+
+              @JavascriptInterface public void requestMedia() { if (ok()) ui(a::requestMedia); }
+
+              @JavascriptInterface public void testNotify(String kind) { if (ok()) ui(() -> a.testNotify(kind)); }
+
               @JavascriptInterface public void pageReady(boolean notifPref) { if (ok()) a.onPageReady(notifPref); }
 
               @JavascriptInterface public void sessionChanged() { if (ok()) a.sessionChanged(); }
@@ -552,6 +558,7 @@ jobs:
           import android.view.View;
           import android.view.ViewGroup;
           import android.view.Window;
+          import android.view.WindowInsets;
           import android.view.WindowManager;
           import android.webkit.CookieManager;
           import android.webkit.PermissionRequest;
@@ -575,7 +582,8 @@ jobs:
           public class MainActivity extends Activity {
               static volatile boolean visible;
 
-              private static final int REQ_FILE = 1, REQ_MEDIA = 2, REQ_NOTIF = 3, REQ_STORAGE = 4;
+              private static final int REQ_FILE = 1, REQ_MEDIA = 2, REQ_NOTIF = 3, REQ_STORAGE = 4, REQ_ALL_MEDIA = 5;
+              private JSONObject pendingUpdate;            // найдено при запуске — покажем, когда сайт загрузится
 
               WebView web;
               private FrameLayout root;
@@ -605,6 +613,14 @@ jobs:
                   web.setBackgroundColor(Color.parseColor("#0b1530"));
                   root.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
                   setContentView(root);
+                  // Android 15: окно всегда «от края до края» — отступаем от системных панелей и клавиатуры сами
+                  if (Build.VERSION.SDK_INT >= 35) {
+                      root.setOnApplyWindowInsetsListener((v, ins) -> {
+                          android.graphics.Insets b = ins.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
+                          v.setPadding(b.left, b.top, b.right, b.bottom);
+                          return WindowInsets.CONSUMED;
+                      });
+                  }
 
                   WebSettings s = web.getSettings();
                   s.setJavaScriptEnabled(true);
@@ -634,6 +650,10 @@ jobs:
 
                   watchNetwork();
                   web.loadUrl(startUrl(getIntent()));
+                  // проверка обновлений при каждом запуске (окно покажет сайт, когда загрузится)
+                  Updater.check(this, false, ev -> runOnUiThread(() -> {
+                      if (pageReady) emit(ev); else pendingUpdate = ev;
+                  }));
               }
 
               /* ---------------- адреса и переходы ---------------- */
@@ -848,6 +868,8 @@ jobs:
                       Prefs.setNotifAsked(this);
                       emit("notif", "state", notifState());
                       if (Notifier.enabled(this)) PushService.startIfNeeded(this);
+                  } else if (req == REQ_ALL_MEDIA) {
+                      emitMedia();
                   } else if (req == REQ_STORAGE && pendingDownload != null) {
                       String[] d = pendingDownload;
                       pendingDownload = null;
@@ -948,6 +970,47 @@ jobs:
                       openNotificationSettings();
                       emit("notif", "state", notifState());
                   }
+              }
+
+              /* ---------------- разрешения при первом запуске ---------------- */
+
+              String mediaState() {
+                  try {
+                      return new JSONObject()
+                              .put("audio", checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+                              .put("camera", checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+                              .toString();
+                  } catch (Exception e) { return "{}"; }
+              }
+
+              private void emitMedia() {
+                  try { emit(new JSONObject(mediaState()).put("t", "media")); } catch (Exception ignored) { }
+              }
+
+              /** Микрофон и камера — системное окно Android (один раз для обоих). */
+              void requestMedia() {
+                  List<String> need = new ArrayList<>();
+                  if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) need.add(Manifest.permission.RECORD_AUDIO);
+                  if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) need.add(Manifest.permission.CAMERA);
+                  if (need.isEmpty()) { emitMedia(); return; }
+                  requestPermissions(need.toArray(new String[0]), REQ_ALL_MEDIA);
+              }
+
+              /** Проверка уведомлений из режима разработчика (на самом устройстве, без сервера). */
+              void testNotify(String kind) {
+                  try {
+                      if ("call".equals(kind)) {
+                          final String id = "test" + System.currentTimeMillis();
+                          Notifier.call(this, new JSONObject().put("call", id).put("chat", 0).put("title", "Проверка звонка").put("from", "TS Messenger"));
+                          root.postDelayed(() -> Notifier.callEnd(this, id), 12000);
+                      } else if ("bg".equals(kind)) {
+                          emit(new JSONObject().put("t", "test_bg").put("running", PushService.running));
+                      } else {
+                          Notifier.message(this, new JSONObject().put("chat", 999999).put("id", System.currentTimeMillis())
+                                  .put("ts", System.currentTimeMillis() / 1000).put("title", "Проверка уведомлений")
+                                  .put("text", "Так выглядит уведомление о новом сообщении ✓").put("group", false));
+                      }
+                  } catch (Exception ignored) { }
               }
 
               void openNotificationSettings() {
@@ -1068,9 +1131,10 @@ jobs:
                       i.removeExtra("chat");
                       runOnUiThread(() -> web.evaluateJavascript("window.TSAppOpenChat&&TSAppOpenChat(" + chat + ")", null));
                   }
-                  // обновления — не чаще раза в 6 часов, тихо (окно покажет сайт)
-                  if (System.currentTimeMillis() - Prefs.lastUpdateCheck(this) > 6 * 3600 * 1000L) {
-                      Updater.check(this, false, this::emit);
+                  // обновление, найденное при запуске, — показываем окно сайта
+                  if (pendingUpdate != null) { final JSONObject u = pendingUpdate; pendingUpdate = null; emit(u); }
+                  else if (System.currentTimeMillis() - Prefs.lastUpdateCheck(this) > 3 * 3600 * 1000L) {
+                      Updater.check(this, false, this::emit);     // приложение долго открыто — проверим ещё раз
                   }
               }
 
@@ -1664,7 +1728,7 @@ jobs:
               private void handle(JSONObject d) {
                   if (!"n".equals(d.optString("t"))) return;
                   String kind = d.optString("kind");
-                  boolean front = MainActivity.visible;
+                  boolean front = MainActivity.visible && !d.optBoolean("test");     // проверка из режима разработчика — всегда
                   switch (kind) {
                       case "msg":
                           if (!front) Notifier.message(this, d);
