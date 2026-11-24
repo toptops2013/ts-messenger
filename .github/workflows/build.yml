@@ -1,13 +1,3 @@
-# Сборка приложения TS Messenger для Android.
-# Весь проект приложения — внутри этого файла (шаг «Создать проект»): ничего больше загружать не нужно.
-# Каждое изменение этого файла = новая версия: APK появляется в Releases, а установленное приложение
-# само находит её и предлагает обновиться.
-#
-# Один раз нужно добавить секреты: Settings → Secrets and variables → Actions → New repository secret
-#   KEYSTORE_B64      — ключ подписи (текст base64)
-#   KEYSTORE_PASSWORD — пароль ключа
-# Без одинакового ключа Android не даст установить обновление поверх старой версии.
-
 name: Android APK
 
 on:
@@ -83,7 +73,6 @@ jobs:
               id 'com.android.application'
           }
 
-          // Номер версии = номер сборки на GitHub (каждая сборка новее предыдущей — по нему приложение находит обновление)
           def vcode = (System.getenv("VERSION_CODE") ?: "1") as int
           def site = System.getenv("SITE_URL") ?: "https://m.topsstudio.com"
           def repo = System.getenv("GITHUB_REPOSITORY") ?: "toptops2013/ts-messenger"
@@ -180,7 +169,6 @@ jobs:
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
-                      <!-- ссылки на мессенджер (и одноразовые ссылки входа) открываются в приложении -->
                       <intent-filter>
                           <action android:name="android.intent.action.VIEW" />
                           <category android:name="android.intent.category.DEFAULT" />
@@ -188,6 +176,17 @@ jobs:
                           <data android:scheme="https" android:host="m.topsstudio.com" />
                       </intent-filter>
                   </activity>
+
+                  <activity
+                      android:name=".CallActivity"
+                      android:exported="false"
+                      android:launchMode="singleTop"
+                      android:taskAffinity="com.topsstudio.messenger.call"
+                      android:excludeFromRecents="true"
+                      android:showWhenLocked="true"
+                      android:turnScreenOn="true"
+                      android:screenOrientation="portrait"
+                      android:theme="@style/CallTheme" />
 
                   <service
                       android:name=".PushService"
@@ -204,6 +203,22 @@ jobs:
                   <receiver android:name=".InstallReceiver" android:exported="false" />
               </application>
           </manifest>
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/res/drawable/ic_call.xml")"
+          cat > app/src/main/res/drawable/ic_call.xml <<'TSEOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="32dp" android:height="32dp" android:viewportWidth="24" android:viewportHeight="24">
+              <path android:pathData="M22,16.9v3a2,2 0,0 1,-2.2 2 19.8,19.8 0,0 1,-8.6 -3.1 19.5,19.5 0,0 1,-6 -6A19.8,19.8 0,0 1,2.1 4.2 2,2 0,0 1,4.1 2h3a2,2 0,0 1,2 1.7c0.1,1 0.4,1.9 0.7,2.8a2,2 0,0 1,-0.5 2.1L8,9.9a16,16 0,0 0,6 6l1.3,-1.3a2,2 0,0 1,2.1 -0.4c0.9,0.3 1.8,0.6 2.8,0.7a2,2 0,0 1,1.7 2z" android:fillColor="#FFFFFFFF" />
+          </vector>
+          TSEOF
+          mkdir -p "$(dirname "app/src/main/res/drawable/ic_call_end.xml")"
+          cat > app/src/main/res/drawable/ic_call_end.xml <<'TSEOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="32dp" android:height="32dp" android:viewportWidth="24" android:viewportHeight="24">
+              <group android:pivotX="12" android:pivotY="12" android:rotation="135">
+                  <path android:pathData="M22,16.9v3a2,2 0,0 1,-2.2 2 19.8,19.8 0,0 1,-8.6 -3.1 19.5,19.5 0,0 1,-6 -6A19.8,19.8 0,0 1,2.1 4.2 2,2 0,0 1,4.1 2h3a2,2 0,0 1,2 1.7c0.1,1 0.4,1.9 0.7,2.8a2,2 0,0 1,-0.5 2.1L8,9.9a16,16 0,0 0,6 6l1.3,-1.3a2,2 0,0 1,2.1 -0.4c0.9,0.3 1.8,0.6 2.8,0.7a2,2 0,0 1,1.7 2z" android:fillColor="#FFFFFFFF" />
+              </group>
+          </vector>
           TSEOF
           mkdir -p "$(dirname "app/src/main/res/drawable/ic_launcher_background.xml")"
           cat > app/src/main/res/drawable/ic_launcher_background.xml <<'TSEOF'
@@ -236,6 +251,13 @@ jobs:
                   android:strokeLineJoin="round" android:fillColor="#00000000" />
           </vector>
           TSEOF
+          mkdir -p "$(dirname "app/src/main/res/drawable/ic_video.xml")"
+          cat > app/src/main/res/drawable/ic_video.xml <<'TSEOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="32dp" android:height="32dp" android:viewportWidth="24" android:viewportHeight="24">
+              <path android:pathData="M23,7l-7,5 7,5zM14,5H3a2,2 0,0 0,-2 2v10a2,2 0,0 0,2 2h11a2,2 0,0 0,2 -2V7a2,2 0,0 0,-2 -2z" android:fillColor="#FFFFFFFF" />
+          </vector>
+          TSEOF
           mkdir -p "$(dirname "app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml")"
           cat > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'TSEOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -248,7 +270,6 @@ jobs:
           mkdir -p "$(dirname "app/src/main/res/mipmap/ic_launcher.xml")"
           cat > app/src/main/res/mipmap/ic_launcher.xml <<'TSEOF'
           <?xml version="1.0" encoding="utf-8"?>
-          <!-- Android 7: обычный значок (скруглённый квадрат) -->
           <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
               <item android:drawable="@drawable/ic_launcher_round_bg" android:left="4dp" android:top="4dp" android:right="4dp" android:bottom="4dp" />
               <item android:drawable="@drawable/ic_launcher_foreground" />
@@ -258,7 +279,6 @@ jobs:
           cat > app/src/main/res/values-night-v29/styles.xml <<'TSEOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <!-- тёмная тема телефона -->
               <style name="AppTheme" parent="android:Theme.Material.NoActionBar">
                   <item name="android:windowBackground">@color/splash</item>
                   <item name="android:statusBarColor">@color/bg</item>
@@ -272,7 +292,6 @@ jobs:
           cat > app/src/main/res/values-v29/styles.xml <<'TSEOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <!-- светлая тема телефона: сайт внутри тоже светлый (prefers-color-scheme) -->
               <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
                   <item name="android:windowBackground">@color/splash</item>
                   <item name="android:statusBarColor">@color/bg</item>
@@ -310,6 +329,12 @@ jobs:
                   <item name="android:colorPrimary">@color/bg</item>
                   <item name="android:colorPrimaryDark">@color/bg</item>
               </style>
+              <style name="CallTheme" parent="android:Theme.Material.NoActionBar">
+                  <item name="android:windowBackground">@color/splash</item>
+                  <item name="android:statusBarColor">#00000000</item>
+                  <item name="android:navigationBarColor">#00000000</item>
+                  <item name="android:windowTranslucentStatus">false</item>
+              </style>
           </resources>
           TSEOF
           mkdir -p "$(dirname "app/src/main/java/com/topsstudio/messenger/ActionReceiver.java")"
@@ -326,7 +351,6 @@ jobs:
 
           import java.util.UUID;
 
-          /** Кнопки в уведомлениях: «Ответить», «Прочитано», «Отклонить» звонок. Работают без открытия приложения. */
           public class ActionReceiver extends BroadcastReceiver {
               static final String KEY_TEXT = "reply_text";
 
@@ -362,7 +386,7 @@ jobs:
                           } else if (a.equals("ts.decline")) {
                               String call = i.getStringExtra("call");
                               Notifier.callEnd(app, call);
-                              if (call != null && call.matches("[A-Za-z0-9_-]{1,40}")) Net.postJson("/api/calls/" + call + "/decline", "{}");
+                              if (call != null && call.matches("[A-Za-z0-9_-]{1,40}") && !call.startsWith("test")) Net.postJson("/api/calls/" + call + "/decline", "{}");
                           }
                       } catch (Exception ignored) {
                       } finally {
@@ -380,7 +404,6 @@ jobs:
           import android.content.Context;
           import android.content.Intent;
 
-          /** После перезагрузки телефона и после обновления приложения — снова включить фоновое подключение. */
           public class BootReceiver extends BroadcastReceiver {
               @Override
               public void onReceive(Context c, Intent i) {
@@ -401,10 +424,6 @@ jobs:
 
           import org.json.JSONObject;
 
-          /**
-           * window.TSAppNative — то, что сайт может попросить у приложения.
-           * Каждый вызов работает только со страниц самого мессенджера (m.topsstudio.com).
-           */
           final class Bridge {
               private final MainActivity a;
 
@@ -428,6 +447,7 @@ jobs:
                               .put("batteryExempt", a.batteryExempt())
                               .put("notif", a.notifState())
                               .put("push", PushService.running)
+                              .put("fullScreen", Notifier.canFullScreen(a))
                               .toString();
                   } catch (Exception e) { return "{}"; }
               }
@@ -440,7 +460,6 @@ jobs:
 
               @JavascriptInterface public void requestBatteryExemption() { if (ok()) ui(a::requestBatteryExemption); }
 
-              /** Уведомление от сайта — только если фоновое подключение не работает (иначе было бы два одинаковых). */
               @JavascriptInterface
               public void notify(String json) {
                   if (!ok() || PushService.running || MainActivity.visible) return;
@@ -465,6 +484,8 @@ jobs:
               }
 
               @JavascriptInterface public void setShowText(boolean v) { if (ok()) Prefs.setShowText(a, v); }
+
+              @JavascriptInterface public void openFullScreenSettings() { if (ok()) ui(a::openFullScreenSettings); }
 
               @JavascriptInterface public String mediaState() { return ok() ? a.mediaState() : "{}"; }
 
@@ -498,6 +519,232 @@ jobs:
               }
           }
           TSEOF
+          mkdir -p "$(dirname "app/src/main/java/com/topsstudio/messenger/CallActivity.java")"
+          cat > app/src/main/java/com/topsstudio/messenger/CallActivity.java <<'TSEOF'
+          package com.topsstudio.messenger;
+
+          import android.animation.AnimatorSet;
+          import android.animation.ObjectAnimator;
+          import android.animation.ValueAnimator;
+          import android.app.Activity;
+          import android.app.KeyguardManager;
+          import android.content.Intent;
+          import android.graphics.Color;
+          import android.graphics.Typeface;
+          import android.graphics.drawable.GradientDrawable;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.view.Gravity;
+          import android.view.View;
+          import android.view.WindowManager;
+          import android.view.animation.AccelerateDecelerateInterpolator;
+          import android.widget.FrameLayout;
+          import android.widget.ImageView;
+          import android.widget.LinearLayout;
+          import android.widget.TextView;
+
+          import java.lang.ref.WeakReference;
+
+          public class CallActivity extends Activity {
+              private static WeakReference<CallActivity> current = new WeakReference<>(null);
+              private String call;
+              private int chat;
+              private boolean video;
+
+              static void closeIf(String id) {
+                  CallActivity a = current.get();
+                  if (a != null && (id == null || id.equals(a.call))) a.runOnUiThread(a::finish);
+              }
+
+              private int dp(float v) { return Math.round(v * getResources().getDisplayMetrics().density); }
+
+              @SuppressWarnings("deprecation")
+              @Override
+              protected void onCreate(Bundle state) {
+                  super.onCreate(state);
+                  current = new WeakReference<>(this);
+                  if (Build.VERSION.SDK_INT >= 27) { setShowWhenLocked(true); setTurnScreenOn(true); }
+                  getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                          | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                  build(getIntent());
+              }
+
+              @Override
+              protected void onNewIntent(Intent i) {
+                  super.onNewIntent(i);
+                  setIntent(i);
+                  build(i);
+              }
+
+              @Override
+              protected void onDestroy() {
+                  if (current.get() == this) current = new WeakReference<>(null);
+                  super.onDestroy();
+              }
+
+              @SuppressWarnings("deprecation")
+              private void build(Intent i) {
+                  call = i.getStringExtra("call");
+                  chat = i.getIntExtra("chat", 0);
+                  video = i.getBooleanExtra("video", false);
+                  String title = i.getStringExtra("title");
+                  if (title == null || title.isEmpty()) title = "Звонок";
+                  String sub = i.getStringExtra("sub");
+                  if (call == null) { finish(); return; }
+
+                  FrameLayout root = new FrameLayout(this);
+                  GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                          new int[]{Color.parseColor("#1b2350"), Color.parseColor("#0b1530"), Color.parseColor("#2a1430")});
+                  root.setBackground(bg);
+
+                  LinearLayout col = new LinearLayout(this);
+                  col.setOrientation(LinearLayout.VERTICAL);
+                  col.setGravity(Gravity.CENTER_HORIZONTAL);
+                  col.setPadding(dp(24), dp(90), dp(24), dp(60));
+                  root.addView(col, new FrameLayout.LayoutParams(-1, -1));
+
+                  FrameLayout av = new FrameLayout(this);
+                  int size = dp(132);
+                  for (int k = 0; k < 2; k++) {
+                      View ring = new View(this);
+                      GradientDrawable rd = new GradientDrawable();
+                      rd.setShape(GradientDrawable.OVAL);
+                      rd.setStroke(dp(2), Color.argb(150, 255, 255, 255));
+                      ring.setBackground(rd);
+                      av.addView(ring, new FrameLayout.LayoutParams(size, size, Gravity.CENTER));
+                      pulse(ring, k * 900L);
+                  }
+                  TextView letter = new TextView(this);
+                  GradientDrawable ad = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                          new int[]{Color.parseColor("#7c8cff"), Color.parseColor("#ff7ab6")});
+                  ad.setShape(GradientDrawable.OVAL);
+                  letter.setBackground(ad);
+                  letter.setGravity(Gravity.CENTER);
+                  letter.setTextColor(Color.WHITE);
+                  letter.setTextSize(48);
+                  letter.setTypeface(Typeface.DEFAULT_BOLD);
+                  letter.setText(title.substring(0, title.offsetByCodePoints(0, 1)).toUpperCase());
+                  av.addView(letter, new FrameLayout.LayoutParams(size, size, Gravity.CENTER));
+                  col.addView(av, new LinearLayout.LayoutParams(dp(220), dp(220)));
+
+                  TextView name = new TextView(this);
+                  name.setText(title);
+                  name.setTextColor(Color.WHITE);
+                  name.setTextSize(28);
+                  name.setTypeface(Typeface.DEFAULT_BOLD);
+                  name.setGravity(Gravity.CENTER);
+                  name.setMaxLines(2);
+                  LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(-1, -2);
+                  np.topMargin = dp(18);
+                  col.addView(name, np);
+
+                  TextView st = new TextView(this);
+                  st.setText(sub != null && !sub.isEmpty() ? sub : (video ? "Входящий видеозвонок" : "Входящий звонок"));
+                  st.setTextColor(Color.argb(170, 255, 255, 255));
+                  st.setTextSize(16);
+                  st.setGravity(Gravity.CENTER);
+                  LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, -2);
+                  sp.topMargin = dp(8);
+                  col.addView(st, sp);
+
+                  View spacer = new View(this);
+                  col.addView(spacer, new LinearLayout.LayoutParams(1, 0, 1f));
+
+                  LinearLayout btns = new LinearLayout(this);
+                  btns.setOrientation(LinearLayout.HORIZONTAL);
+                  btns.setGravity(Gravity.CENTER);
+                  btns.addView(button(R.drawable.ic_call_end, "#ef4444", "Отклонить", v -> decline(), false));
+                  if (video) btns.addView(button(R.drawable.ic_video, "#22c55e", "С видео", v -> answer(true), true));
+                  btns.addView(button(R.drawable.ic_call, "#22c55e", "Ответить", v -> answer(false), !video));
+                  col.addView(btns, new LinearLayout.LayoutParams(-1, -2));
+
+                  setContentView(root);
+                  root.setAlpha(0f);
+                  root.animate().alpha(1f).setDuration(250).start();
+              }
+
+              private void pulse(View v, long delay) {
+                  ObjectAnimator sx = ObjectAnimator.ofFloat(v, "scaleX", 1f, 1.6f);
+                  ObjectAnimator sy = ObjectAnimator.ofFloat(v, "scaleY", 1f, 1.6f);
+                  ObjectAnimator a = ObjectAnimator.ofFloat(v, "alpha", 0.9f, 0f);
+                  for (ObjectAnimator o : new ObjectAnimator[]{sx, sy, a}) {
+                      o.setRepeatCount(ValueAnimator.INFINITE);
+                      o.setDuration(1800);
+                      o.setStartDelay(delay);
+                  }
+                  AnimatorSet set = new AnimatorSet();
+                  set.playTogether(sx, sy, a);
+                  set.start();
+              }
+
+              private View button(int icon, String color, String label, View.OnClickListener click, boolean shake) {
+                  LinearLayout box = new LinearLayout(this);
+                  box.setOrientation(LinearLayout.VERTICAL);
+                  box.setGravity(Gravity.CENTER_HORIZONTAL);
+                  box.setPadding(dp(16), 0, dp(16), 0);
+                  ImageView b = new ImageView(this);
+                  GradientDrawable d = new GradientDrawable();
+                  d.setShape(GradientDrawable.OVAL);
+                  d.setColor(Color.parseColor(color));
+                  b.setBackground(d);
+                  b.setImageResource(icon);
+                  b.setScaleType(ImageView.ScaleType.CENTER);
+                  b.setElevation(dp(8));
+                  b.setOnClickListener(click);
+                  b.setContentDescription(label);
+                  box.addView(b, new LinearLayout.LayoutParams(dp(76), dp(76)));
+                  TextView t = new TextView(this);
+                  t.setText(label);
+                  t.setTextColor(Color.argb(200, 255, 255, 255));
+                  t.setTextSize(13);
+                  t.setGravity(Gravity.CENTER);
+                  LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-2, -2);
+                  tp.topMargin = dp(10);
+                  box.addView(t, tp);
+                  if (shake) {
+                      ObjectAnimator r = ObjectAnimator.ofFloat(b, "rotation", 0f, -14f, 14f, -14f, 14f, 0f, 0f, 0f);
+                      r.setDuration(1400);
+                      r.setRepeatCount(ValueAnimator.INFINITE);
+                      r.setInterpolator(new AccelerateDecelerateInterpolator());
+                      r.start();
+                  }
+                  return box;
+              }
+
+              private void decline() {
+                  Notifier.callEnd(this, call);
+                  final String id = call;
+                  if (id != null && id.matches("[A-Za-z0-9_-]{1,40}") && !id.startsWith("test")) {
+                      new Thread(() -> Net.postJson("/api/calls/" + id + "/decline", "{}")).start();
+                  }
+                  finish();
+              }
+
+              private void answer(boolean withVideo) {
+                  Notifier.callEnd(this, call);
+                  Intent i = new Intent(this, MainActivity.class)
+                          .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                          .putExtra("answer", call)
+                          .putExtra("answerVideo", withVideo)
+                          .putExtra("chat", chat);
+
+                  KeyguardManager km = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
+                  if (Build.VERSION.SDK_INT >= 26 && km != null && km.isKeyguardLocked()) {
+                      km.requestDismissKeyguard(this, new KeyguardManager.KeyguardDismissCallback() {
+                          @Override public void onDismissSucceeded() { startActivity(i); finish(); }
+                          @Override public void onDismissCancelled() { }
+                      });
+                  } else {
+                      startActivity(i);
+                      finish();
+                  }
+              }
+
+              @SuppressWarnings("deprecation")
+              @Override
+              public void onBackPressed() {  }
+          }
+          TSEOF
           mkdir -p "$(dirname "app/src/main/java/com/topsstudio/messenger/InstallReceiver.java")"
           cat > app/src/main/java/com/topsstudio/messenger/InstallReceiver.java <<'TSEOF'
           package com.topsstudio.messenger;
@@ -508,7 +755,6 @@ jobs:
           import android.content.pm.PackageInstaller;
           import android.widget.Toast;
 
-          /** Ответ системы на установку обновления: показать окно подтверждения или сообщить об ошибке. */
           public class InstallReceiver extends BroadcastReceiver {
               @Override
               @SuppressWarnings("deprecation")
@@ -571,6 +817,15 @@ jobs:
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
           import android.widget.FrameLayout;
+          import android.widget.ImageView;
+          import android.widget.LinearLayout;
+          import android.widget.ProgressBar;
+          import android.widget.TextView;
+          import android.content.res.ColorStateList;
+          import android.graphics.Typeface;
+          import android.view.Gravity;
+          import android.animation.ObjectAnimator;
+          import android.animation.ValueAnimator;
           import android.widget.Toast;
 
           import org.json.JSONObject;
@@ -578,12 +833,14 @@ jobs:
           import java.util.ArrayList;
           import java.util.List;
 
-          /** Главный экран: сайт мессенджера внутри приложения + мост к Android (уведомления, звонки, обновления). */
           public class MainActivity extends Activity {
               static volatile boolean visible;
 
               private static final int REQ_FILE = 1, REQ_MEDIA = 2, REQ_NOTIF = 3, REQ_STORAGE = 4, REQ_ALL_MEDIA = 5;
-              private JSONObject pendingUpdate;            // найдено при запуске — покажем, когда сайт загрузится
+              private JSONObject pendingUpdate;
+              private String pendingAnswer;
+              private boolean pendingAnswerVideo;
+              private View loader;
 
               WebView web;
               private FrameLayout root;
@@ -613,7 +870,8 @@ jobs:
                   web.setBackgroundColor(Color.parseColor("#0b1530"));
                   root.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
                   setContentView(root);
-                  // Android 15: окно всегда «от края до края» — отступаем от системных панелей и клавиатуры сами
+                  showLoader();
+
                   if (Build.VERSION.SDK_INT >= 35) {
                       root.setOnApplyWindowInsetsListener((v, ins) -> {
                           android.graphics.Insets b = ins.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
@@ -635,7 +893,7 @@ jobs:
                   s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
                   s.setJavaScriptCanOpenWindowsAutomatically(false);
                   s.setSupportMultipleWindows(false);
-                  // сайт узнаёт, что он внутри приложения (и по объекту window.TSAppNative)
+
                   s.setUserAgentString(s.getUserAgentString() + " " + Net.UA);
                   WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
 
@@ -649,14 +907,13 @@ jobs:
                   web.setDownloadListener((url, ua, cd, mime, len) -> download(url, cd, mime));
 
                   watchNetwork();
+                  takeAnswer(getIntent());
                   web.loadUrl(startUrl(getIntent()));
-                  // проверка обновлений при каждом запуске (окно покажет сайт, когда загрузится)
+
                   Updater.check(this, false, ev -> runOnUiThread(() -> {
                       if (pageReady) emit(ev); else pendingUpdate = ev;
                   }));
               }
-
-              /* ---------------- адреса и переходы ---------------- */
 
               private String startUrl(Intent i) {
                   Uri d = i != null ? i.getData() : null;
@@ -672,6 +929,7 @@ jobs:
                   Uri d = i.getData();
                   int chat = i.getIntExtra("chat", 0);
                   if (i.getStringExtra("call") != null) showOverLock(true);
+                  if (takeAnswer(i) && pageReady) deliverAnswer();
                   if (d != null && "https".equals(d.getScheme()) && Net.HOST.equals(d.getHost())) {
                       web.loadUrl(d.toString());
                   } else if (chat > 0) {
@@ -680,7 +938,6 @@ jobs:
                   }
               }
 
-              /** Входящий звонок: показать приложение поверх экрана блокировки. */
               private void showOverLock(boolean on) {
                   if (Build.VERSION.SDK_INT >= 27) { setShowWhenLocked(on); setTurnScreenOn(on); }
                   else {
@@ -707,9 +964,9 @@ jobs:
                   public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
                       Uri u = r.getUrl();
                       String sc = u.getScheme() == null ? "" : u.getScheme();
-                      if (("https".equals(sc)) && Net.ourHost(u.getHost())) return false;     // наш сайт — внутри приложения
+                      if (("https".equals(sc)) && Net.ourHost(u.getHost())) return false;
                       if ("http".equals(sc) || "https".equals(sc) || "mailto".equals(sc) || "tel".equals(sc)) openExternal(u);
-                      return true;                                                               // всё прочее — не открываем
+                      return true;
                   }
 
                   @Override
@@ -725,6 +982,8 @@ jobs:
                   public void onPageFinished(WebView v, String url) {
                       curUrl = url;
                       CookieManager.getInstance().flush();
+
+                      root.postDelayed(MainActivity.this::hideLoader, 150);
                   }
 
                   @Override
@@ -733,10 +992,9 @@ jobs:
                   }
               }
 
-              /* ---------------- нет сети ---------------- */
-
               private void showOffline() {
                   offline = true;
+                  hideLoader();
                   String html = "<!DOCTYPE html><html><head><meta name=viewport content='width=device-width,initial-scale=1'><style>"
                           + "body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0b1530;color:#fff;"
                           + "font:16px system-ui,sans-serif;text-align:center}.b{margin-top:22px;padding:13px 26px;border:0;border-radius:14px;"
@@ -758,8 +1016,6 @@ jobs:
                   };
                   try { cm.registerDefaultNetworkCallback(netCb); } catch (Exception ignored) { }
               }
-
-              /* ---------------- камера, микрофон, файлы, видео на весь экран ---------------- */
 
               private class Chrome extends WebChromeClient {
                   @Override
@@ -820,7 +1076,7 @@ jobs:
 
                   @Override
                   public Bitmap getDefaultVideoPoster() {
-                      return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);      // без серого значка «play» до загрузки видео
+                      return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
                   }
               }
 
@@ -877,8 +1133,6 @@ jobs:
                   }
               }
 
-              /* ---------------- скачивание файлов ---------------- */
-
               private void download(String url, String cd, String mime) {
                   Uri u = Uri.parse(url);
                   if (!"https".equals(u.getScheme()) || !Net.ourHost(u.getHost())) { openExternal(u); return; }
@@ -902,8 +1156,6 @@ jobs:
                       Toast.makeText(this, "Не удалось скачать файл", Toast.LENGTH_SHORT).show();
                   }
               }
-
-              /* ---------------- жизненный цикл ---------------- */
 
               @Override
               protected void onResume() {
@@ -943,9 +1195,6 @@ jobs:
                   });
               }
 
-              /* ---------------- вызовы из моста ---------------- */
-
-              /** Событие для сайта: window.__tsApp({t: ...}). */
               void emit(JSONObject ev) {
                   runOnUiThread(() -> { if (web != null && onMainSite()) web.evaluateJavascript("window.__tsApp&&__tsApp(" + ev + ")", null); });
               }
@@ -972,8 +1221,6 @@ jobs:
                   }
               }
 
-              /* ---------------- разрешения при первом запуске ---------------- */
-
               String mediaState() {
                   try {
                       return new JSONObject()
@@ -987,7 +1234,6 @@ jobs:
                   try { emit(new JSONObject(mediaState()).put("t", "media")); } catch (Exception ignored) { }
               }
 
-              /** Микрофон и камера — системное окно Android (один раз для обоих). */
               void requestMedia() {
                   List<String> need = new ArrayList<>();
                   if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) need.add(Manifest.permission.RECORD_AUDIO);
@@ -996,7 +1242,6 @@ jobs:
                   requestPermissions(need.toArray(new String[0]), REQ_ALL_MEDIA);
               }
 
-              /** Проверка уведомлений из режима разработчика (на самом устройстве, без сервера). */
               void testNotify(String kind) {
                   try {
                       if ("call".equals(kind)) {
@@ -1036,8 +1281,6 @@ jobs:
                       try { startActivity(new Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)); } catch (Exception ignored) { }
                   }
               }
-
-              /* ---------------- звонок: режим разговора, динамик, экран ---------------- */
 
               @SuppressWarnings("deprecation")
               void callState(boolean active, boolean video) {
@@ -1080,7 +1323,6 @@ jobs:
 
               boolean isSpeaker() { return speaker; }
 
-              /** Во время разговора у уха экран гаснет (датчик приближения). */
               private void proximity(boolean on) {
                   PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
                   if (on) {
@@ -1092,8 +1334,6 @@ jobs:
                       proximity.release();
                   }
               }
-
-              /* ---------------- цвет системных панелей — как у сайта ---------------- */
 
               private int barColor = Color.parseColor("#0f0f12");
               private boolean barLight;
@@ -1118,10 +1358,102 @@ jobs:
                   root.setBackgroundColor(barColor);
               }
 
-              /* ---------------- готовность страницы ---------------- */
+              private int dp(float v) { return Math.round(v * getResources().getDisplayMetrics().density); }
+
+              private void showLoader() {
+                  FrameLayout box = new FrameLayout(this);
+                  box.setBackgroundColor(Color.parseColor("#0b1530"));
+                  box.setClickable(true);
+                  LinearLayout col = new LinearLayout(this);
+                  col.setOrientation(LinearLayout.VERTICAL);
+                  col.setGravity(Gravity.CENTER_HORIZONTAL);
+                  FrameLayout iconBox = new FrameLayout(this);
+                  ProgressBar ring = new ProgressBar(this);
+                  ring.setIndeterminate(true);
+                  ring.setIndeterminateTintList(ColorStateList.valueOf(Color.parseColor("#7c8cff")));
+                  iconBox.addView(ring, new FrameLayout.LayoutParams(dp(132), dp(132), Gravity.CENTER));
+
+                  ImageView icon = new ImageView(this);
+                  android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable(
+                          android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                          new int[]{Color.parseColor("#7c8cff"), Color.parseColor("#ff7ab6")});
+                  g.setCornerRadius(dp(26));
+                  icon.setBackground(g);
+                  icon.setImageResource(R.drawable.ic_launcher_foreground);
+                  icon.setElevation(dp(10));
+                  iconBox.addView(icon, new FrameLayout.LayoutParams(dp(92), dp(92), Gravity.CENTER));
+                  col.addView(iconBox, new LinearLayout.LayoutParams(dp(140), dp(140)));
+                  TextView t = new TextView(this);
+                  t.setText("TS Messenger");
+                  t.setTextColor(Color.WHITE);
+                  t.setTextSize(20);
+                  t.setTypeface(Typeface.DEFAULT_BOLD);
+                  t.setGravity(Gravity.CENTER);
+                  LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-2, -2);
+                  tp.topMargin = dp(14);
+                  col.addView(t, tp);
+                  TextView s2 = new TextView(this);
+                  s2.setText("Подключение…");
+                  s2.setTextColor(Color.argb(150, 255, 255, 255));
+                  s2.setTextSize(13);
+                  LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-2, -2);
+                  sp.topMargin = dp(6);
+                  col.addView(s2, sp);
+                  box.addView(col, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
+                  root.addView(box, new FrameLayout.LayoutParams(-1, -1));
+
+                  ObjectAnimator sx = ObjectAnimator.ofFloat(icon, "scaleX", 1f, 1.08f);
+                  ObjectAnimator sy = ObjectAnimator.ofFloat(icon, "scaleY", 1f, 1.08f);
+                  for (ObjectAnimator o : new ObjectAnimator[]{sx, sy}) {
+                      o.setDuration(900);
+                      o.setRepeatMode(ValueAnimator.REVERSE);
+                      o.setRepeatCount(ValueAnimator.INFINITE);
+                      o.start();
+                  }
+                  box.setAlpha(0f);
+                  box.animate().alpha(1f).setDuration(200).start();
+                  loader = box;
+                  root.postDelayed(this::hideLoader, 25000);
+              }
+
+              private void hideLoader() {
+                  final View l = loader;
+                  if (l == null) return;
+                  loader = null;
+                  l.animate().alpha(0f).scaleX(1.04f).scaleY(1.04f).setDuration(300).withEndAction(() -> root.removeView(l)).start();
+              }
+
+              private boolean takeAnswer(Intent i) {
+                  String a = i != null ? i.getStringExtra("answer") : null;
+                  if (a == null || !a.matches("[A-Za-z0-9_-]{1,40}")) return false;
+                  pendingAnswer = a;
+                  pendingAnswerVideo = i.getBooleanExtra("answerVideo", false);
+                  i.removeExtra("answer");
+                  Notifier.callEnd(this, a);
+                  return true;
+              }
+
+              private void deliverAnswer() {
+                  if (pendingAnswer == null) return;
+                  String js = "window.TSAppAnswer&&TSAppAnswer('" + pendingAnswer + "'," + pendingAnswerVideo + ")";
+                  pendingAnswer = null;
+                  runOnUiThread(() -> web.evaluateJavascript(js, null));
+              }
+
+              void openFullScreenSettings() {
+                  if (Build.VERSION.SDK_INT >= 34) {
+                      try {
+                          startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:" + getPackageName())));
+                          return;
+                      } catch (Exception ignored) { }
+                  }
+                  openNotificationSettings();
+              }
 
               void onPageReady(boolean notifPref) {
                   pageReady = true;
+                  runOnUiThread(this::hideLoader);
+                  deliverAnswer();
                   Prefs.setLoggedIn(this, true);
                   Prefs.setEnabled(this, notifPref);
                   PushService.kick(this);
@@ -1131,10 +1463,10 @@ jobs:
                       i.removeExtra("chat");
                       runOnUiThread(() -> web.evaluateJavascript("window.TSAppOpenChat&&TSAppOpenChat(" + chat + ")", null));
                   }
-                  // обновление, найденное при запуске, — показываем окно сайта
+
                   if (pendingUpdate != null) { final JSONObject u = pendingUpdate; pendingUpdate = null; emit(u); }
                   else if (System.currentTimeMillis() - Prefs.lastUpdateCheck(this) > 3 * 3600 * 1000L) {
-                      Updater.check(this, false, this::emit);     // приложение долго открыто — проверим ещё раз
+                      Updater.check(this, false, this::emit);
                   }
               }
 
@@ -1164,7 +1496,6 @@ jobs:
           import okhttp3.RequestBody;
           import okhttp3.Response;
 
-          /** Запросы к серверу мессенджера от имени вошедшего пользователя (cookie из WebView). */
           final class Net {
               private Net() { }
 
@@ -1189,20 +1520,17 @@ jobs:
                   try { return CookieManager.getInstance().getCookie(SITE); } catch (Throwable e) { return null; }
               }
 
-              /** Есть ли сессия (cookie msid). */
               static boolean hasSession() {
                   String c = cookie();
                   return c != null && c.contains("msid=");
               }
 
-              /** Только наш сайт и его поддомены (m., voicem., adminm.). */
               static boolean ourHost(String host) {
                   if (host == null) return false;
                   String root = HOST.contains(".") ? HOST.substring(HOST.indexOf('.') + 1) : HOST;
                   return host.equals(HOST) || host.equals(root) || host.endsWith("." + root);
               }
 
-              /** POST JSON к API (те же заголовки, что у сайта: защита от подделки запросов). */
               static int postJson(String path, String json) {
                   String c = cookie();
                   if (c == null) return 401;
@@ -1247,7 +1575,6 @@ jobs:
           import java.util.List;
           import java.util.Map;
 
-          /** Все уведомления приложения: сообщения (с ответом прямо из шторки), звонки, фоновое подключение. */
           final class Notifier {
               private Notifier() { }
 
@@ -1261,7 +1588,6 @@ jobs:
               static final int ID_UPDATE = 3;
               static final int ACCENT = 0xFF7C8CFF;
 
-              /** Последние сообщения по чатам — чтобы в уведомлении была переписка, а не одна строка. */
               private static final class Line {
                   final long id; final String sender; final String text; final long ts;
                   Line(long id, String sender, String text, long ts) { this.id = id; this.sender = sender; this.text = text; this.ts = ts; }
@@ -1333,9 +1659,6 @@ jobs:
                   return PendingIntent.getActivity(c, (call != null ? 500000 : 0) + chat, i, piFlags(false));
               }
 
-              /* ---------------- сообщения ---------------- */
-
-              /** n: {chat, id, ts, title, sender, text, group} — с сервера (фоновое подключение). */
               @SuppressWarnings("deprecation")
               static synchronized void message(Context c, JSONObject n) {
                   if (!Prefs.enabled(c)) return;
@@ -1376,7 +1699,6 @@ jobs:
                           .setContentIntent(openApp(c, chat, null))
                           .setDeleteIntent(action(c, "dismiss", chat, 0));
 
-                  // «Ответить» прямо из шторки и «Прочитано»
                   RemoteInput ri = new RemoteInput.Builder(ActionReceiver.KEY_TEXT).setLabel("Сообщение…").build();
                   Notification.Action reply = new Notification.Action.Builder(
                           android.graphics.drawable.Icon.createWithResource(c, R.drawable.ic_stat), "Ответить",
@@ -1404,7 +1726,6 @@ jobs:
                   return PendingIntent.getBroadcast(c, (what.hashCode() & 0xffff) * 31 + chat, i, piFlags(true));
               }
 
-              /** Общая «папка» уведомлений сообщений (Android группирует их под ней). */
               private static void summary(Context c) {
                   if (chats.isEmpty()) { nm(c).cancel(ID_SUMMARY); return; }
                   int total = 0;
@@ -1420,7 +1741,6 @@ jobs:
                   nm(c).notify(ID_SUMMARY, b.build());
               }
 
-              /** Добавить свой ответ в уведомление (после «Ответить» из шторки). */
               static synchronized void addOwnReply(Context c, int chat, String text) {
                   ChatN cn = chats.get(chat);
                   if (cn == null) return;
@@ -1428,7 +1748,6 @@ jobs:
                   post(c, chat, cn, false);
               }
 
-              /** Сообщение удалили — убираем его из уведомления. */
               static synchronized void removeMessage(Context c, int chat, long id) {
                   ChatN cn = chats.get(chat);
                   if (cn == null) return;
@@ -1436,7 +1755,6 @@ jobs:
                   if (cn.lines.isEmpty()) cancelChat(c, chat); else post(c, chat, cn, false);
               }
 
-              /** Чат прочитан (здесь или на другом устройстве). */
               static synchronized void cancelChat(Context c, int chat) {
                   chats.remove(chat);
                   nm(c).cancel(chatId(chat));
@@ -1445,14 +1763,12 @@ jobs:
 
               static synchronized void forget(int chat) { chats.remove(chat); }
 
-              /** Открыли приложение — сообщения больше не висят в шторке. */
               static synchronized void clearMessages(Context c) {
                   for (Integer chat : new ArrayList<>(chats.keySet())) nm(c).cancel(chatId(chat));
                   chats.clear();
                   nm(c).cancel(ID_SUMMARY);
               }
 
-              /** Уведомление от самого сайта (когда фоновое подключение выключено, а приложение свёрнуто). */
               static synchronized void simple(Context c, String title, String body, int chat) {
                   if (!Prefs.enabled(c)) return;
                   JSONObject n = new JSONObject();
@@ -1466,18 +1782,24 @@ jobs:
                   nm(c).notify((int) (System.currentTimeMillis() % 90000) + 10, b.build());
               }
 
-              /* ---------------- звонки ---------------- */
-
               static int callId(String call) { return 900000 + (call.hashCode() & 0xffff); }
 
-              /** Входящий звонок: экран поверх блокировки, мелодия звонка, «Ответить» / «Отклонить». */
               static void call(Context c, JSONObject n) {
                   if (!Prefs.enabled(c)) return;
                   String call = n.optString("call");
                   int chat = n.optInt("chat");
                   boolean video = n.optBoolean("video");
                   String who = n.optString("title", "Звонок");
-                  PendingIntent open = openApp(c, chat, call);
+                  String sub = n.optBoolean("group") ? (n.optString("from") + " — " + (video ? "видеозвонок в группе" : "звонок в группе")) : "";
+
+                  Intent ci = new Intent(c, CallActivity.class)
+                          .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_USER_ACTION)
+                          .putExtra("call", call).putExtra("chat", chat).putExtra("video", video)
+                          .putExtra("title", who).putExtra("sub", sub);
+                  PendingIntent open = PendingIntent.getActivity(c, callId(call), ci, piFlags(false));
+                  Intent ai = new Intent(c, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                          .putExtra("answer", call).putExtra("chat", chat);
+                  PendingIntent answer = PendingIntent.getActivity(c, callId(call) + 1, ai, piFlags(false));
                   Intent dec = new Intent(c, ActionReceiver.class).setAction("ts.decline").putExtra("call", call);
                   PendingIntent decline = PendingIntent.getBroadcast(c, callId(call), dec, piFlags(false));
                   Notification.Builder b = builder(c, CH_CALL)
@@ -1490,22 +1812,25 @@ jobs:
                           .setContentIntent(open)
                           .setFullScreenIntent(open, true)
                           .addAction(new Notification.Action.Builder(null, "Отклонить", decline).build())
-                          .addAction(new Notification.Action.Builder(null, "Ответить", open).build());
+                          .addAction(new Notification.Action.Builder(null, "Ответить", answer).build());
                   if (Build.VERSION.SDK_INT >= 26) b.setTimeoutAfter(50000);
                   if (Build.VERSION.SDK_INT < 26) {
                       b.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE))
                               .setVibrate(new long[]{0, 800, 600, 800});
                   }
                   Notification nt = b.build();
-                  nt.flags |= Notification.FLAG_INSISTENT;          // мелодия повторяется, пока не ответят
+                  nt.flags |= Notification.FLAG_INSISTENT;
                   nm(c).notify(callId(call), nt);
               }
 
               static void callEnd(Context c, String call) {
                   if (call != null && !call.isEmpty()) nm(c).cancel(callId(call));
+                  CallActivity.closeIf(call);
               }
 
-              /* ---------------- фоновое подключение и обновления ---------------- */
+              static boolean canFullScreen(Context c) {
+                  return Build.VERSION.SDK_INT < 34 || nm(c).canUseFullScreenIntent();
+              }
 
               static Notification background(Context c) {
                   return builder(c, CH_BG)
@@ -1541,7 +1866,6 @@ jobs:
           import android.content.Context;
           import android.content.SharedPreferences;
 
-          /** Настройки приложения (на устройстве). */
           final class Prefs {
               private Prefs() { }
 
@@ -1549,26 +1873,21 @@ jobs:
                   return c.getApplicationContext().getSharedPreferences("ts", Context.MODE_PRIVATE);
               }
 
-              /** Уведомления вообще включены (переключатель «Уведомления» на сайте). */
               static boolean enabled(Context c) { return p(c).getBoolean("enabled", true); }
               static void setEnabled(Context c, boolean v) { p(c).edit().putBoolean("enabled", v).apply(); }
 
-              /** Фоновое подключение — уведомления, когда приложение закрыто. */
               static boolean background(Context c) { return p(c).getBoolean("background", true); }
               static void setBackground(Context c, boolean v) { p(c).edit().putBoolean("background", v).apply(); }
 
-              /** Показывать текст сообщений в уведомлениях. */
               static boolean showText(Context c) { return p(c).getBoolean("show_text", true); }
               static void setShowText(Context c, boolean v) { p(c).edit().putBoolean("show_text", v).apply(); }
 
-              /** Спрашивали ли уже разрешение на уведомления (Android 13+). */
               static boolean notifAsked(Context c) { return p(c).getBoolean("notif_asked", false); }
               static void setNotifAsked(Context c) { p(c).edit().putBoolean("notif_asked", true).apply(); }
 
               static long lastUpdateCheck(Context c) { return p(c).getLong("upd_check", 0); }
               static void setLastUpdateCheck(Context c, long t) { p(c).edit().putLong("upd_check", t).apply(); }
 
-              /** Вошёл ли пользователь (по последнему открытию сайта). */
               static boolean loggedIn(Context c) { return p(c).getBoolean("logged", false); }
               static void setLoggedIn(Context c, boolean v) { p(c).edit().putBoolean("logged", v).apply(); }
           }
@@ -1595,10 +1914,6 @@ jobs:
           import okhttp3.WebSocket;
           import okhttp3.WebSocketListener;
 
-          /**
-           * Фоновое подключение к серверу: уведомления о сообщениях и звонках, когда приложение закрыто.
-           * Сервер шлёт сюда только короткие события "n" и не считает вас «в сети».
-           */
           public class PushService extends Service {
               static volatile boolean running;
 
@@ -1606,7 +1921,7 @@ jobs:
               private WebSocket ws;
               private long backoff = 2000;
               private boolean stopped;
-              private int gen;                              // номер подключения — старые события игнорируем
+              private int gen;
               private ConnectivityManager.NetworkCallback netCb;
 
               static boolean shouldRun(Context c) {
@@ -1619,7 +1934,6 @@ jobs:
                   try {
                       if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(i); else c.startService(i);
                   } catch (Exception ignored) {
-                      // Android может запретить запуск из фона — запустится при следующем открытии приложения
                   }
               }
 
@@ -1627,7 +1941,6 @@ jobs:
                   c.stopService(new Intent(c, PushService.class));
               }
 
-              /** Переподключиться сейчас (например, появилась сеть или вошли в аккаунт). */
               static void kick(Context c) {
                   if (running) {
                       Intent i = new Intent(c, PushService.class).setAction("reconnect");
@@ -1717,7 +2030,7 @@ jobs:
               private void dropped(int my, int code) {
                   if (my != gen) return;
                   ws = null;
-                  if (code == 4001) {                       // вышли из аккаунта или сессия истекла
+                  if (code == 4001) {
                       Prefs.setLoggedIn(this, false);
                       stopSelf();
                       return;
@@ -1728,7 +2041,7 @@ jobs:
               private void handle(JSONObject d) {
                   if (!"n".equals(d.optString("t"))) return;
                   String kind = d.optString("kind");
-                  boolean front = MainActivity.visible && !d.optBoolean("test");     // проверка из режима разработчика — всегда
+                  boolean front = MainActivity.visible && !d.optBoolean("test");
                   switch (kind) {
                       case "msg":
                           if (!front) Notifier.message(this, d);
@@ -1794,17 +2107,13 @@ jobs:
           import okhttp3.Request;
           import okhttp3.Response;
 
-          /**
-           * Обновление через GitHub: последний релиз репозитория, файл ts-messenger.apk.
-           * Номер версии — в названии релиза (v123 = versionCode 123). Ставится поверх, данные не теряются.
-           */
           final class Updater {
               private Updater() { }
 
               interface Cb { void event(JSONObject ev); }
 
               static final String ASSET = "ts-messenger.apk";
-              private static JSONObject latest;            // {code, version, url, size, notes}
+              private static JSONObject latest;
               static volatile boolean waitingPermission;
               private static volatile boolean busy;
 
@@ -1814,7 +2123,6 @@ jobs:
                   return o;
               }
 
-              /** Проверить новую версию. manual — человек сам нажал «Проверить» (сообщаем и «у вас последняя»). */
               static void check(Context c, boolean manual, Cb cb) {
                   new Thread(() -> {
                       try {
@@ -1857,7 +2165,6 @@ jobs:
                   }).start();
               }
 
-              /** Скачать и установить. Нужен разрешённый «Установка неизвестных приложений» для этого приложения. */
               static void install(Activity a, Cb cb) {
                   if (busy) return;
                   if (latest == null) {
@@ -1898,7 +2205,7 @@ jobs:
                                   }
                               }
                           }
-                          // проверяем, что это наше приложение и оно новее (подпись проверит сам Android)
+
                           PackageInfo pi = a.getPackageManager().getPackageArchiveInfo(f.getAbsolutePath(), 0);
                           if (pi == null || !a.getPackageName().equals(pi.packageName)) throw new Exception("файл повреждён");
                           long code = Build.VERSION.SDK_INT >= 28 ? pi.getLongVersionCode() : pi.versionCode;
@@ -1925,7 +2232,7 @@ jobs:
                           JSONObject o = ev("update_error");
                           try { o.put("error", "Не удалось обновить: " + e.getMessage()); } catch (Exception ignored) { }
                           cb.event(o);
-                          //noinspection ResultOfMethodCallIgnored
+
                           f.delete();
                       } finally {
                           busy = false;
